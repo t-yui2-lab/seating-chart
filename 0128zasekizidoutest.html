@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>座席配置オートメーション 6.4 (修正済)</title>
+    <title>座席配置オートメーション 6.5</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -92,7 +92,8 @@
             const [statusMessage, setStatusMessage] = useState({ text: '', type: '' });
             const [isViewMode, setIsViewMode] = useState(false);
 
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'seating-automation-app';
+            // --- Canvas Environment Variables Safe Access ---
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'seating-automation-app-v6';
             const db = useRef(null);
 
             useEffect(() => {
@@ -100,10 +101,16 @@
                 if (params.get('mode') === 'view') setIsViewMode(true);
 
                 const initFirebase = async () => {
+                    // GitHubなどの外部で動かす際は設定がないため、クラッシュ防止のためのチェック
                     if (typeof window.Firebase === 'undefined') {
                         setTimeout(initFirebase, 500); 
                         return;
                     }
+                    if (typeof __firebase_config === 'undefined') {
+                        console.warn("Firebase configuration not found. Sync feature disabled.");
+                        return;
+                    }
+
                     const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, getFirestore, doc, onSnapshot } = window.Firebase;
                     const firebaseConfig = JSON.parse(__firebase_config);
                     const app = initializeApp(firebaseConfig);
@@ -173,7 +180,7 @@
 
             const handleSave = async () => {
                 const { doc, setDoc } = window.Firebase;
-                if (!db.current) return;
+                if (!db.current) return showStatus("クラウド設定がありません", "error");
                 setIsSaving(true);
                 try {
                     const layoutDocRef = doc(db.current, 'artifacts', appId, 'public', 'data', 'layouts', 'main');
@@ -188,7 +195,12 @@
 
             const copyAttendeeUrl = () => {
                 const url = new URL(window.location.href); url.searchParams.set('mode', 'view');
-                const textArea = document.createElement("textarea"); textArea.value = url.toString(); document.body.appendChild(textArea); textArea.select();
+                const urlStr = url.toString();
+                if (urlStr.startsWith('file://')) {
+                    showStatus("⚠️ GitHubへアップロードし、https:// で開く必要があります。", "error");
+                    return;
+                }
+                const textArea = document.createElement("textarea"); textArea.value = urlStr; document.body.appendChild(textArea); textArea.select();
                 try { document.execCommand('copy'); showStatus("来場者用URLをコピーしました。", "success"); } 
                 catch (err) { console.error('Copy failed', err); }
                 document.body.removeChild(textArea);
@@ -202,6 +214,7 @@
             }, [blocks, assignments, disabledSeats]);
 
             const processFile = (file) => {
+                if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (evt) => {
                     try {
@@ -340,7 +353,7 @@
                         <div className="flex items-center gap-5">
                             <div className="bg-indigo-600 text-white p-4 rounded-[24px] shadow-xl shadow-indigo-200"><Icon name="layout" className="w-10 h-10" /></div>
                             <div>
-                                <h1 className="text-3xl md:text-5xl font-black text-slate-800 tracking-tighter italic leading-none uppercase tracking-widest">座席配置 Ver 6.4</h1>
+                                <h1 className="text-3xl md:text-5xl font-black text-slate-800 tracking-tighter italic leading-none uppercase tracking-widest">座席配置 Ver 6.5</h1>
                                 <div className="flex items-center gap-3 mt-3">
                                     <div className="status-card border-indigo-100 bg-indigo-50/50"><span className="text-[9px] font-black text-indigo-400">総座席数</span><span className="text-lg font-black text-indigo-700">{stats.total}</span></div>
                                     <div className="status-card border-slate-100 bg-white"><span className="text-[9px] font-black text-slate-400">配置済</span><span className="text-lg font-black text-indigo-700">{stats.assigned}</span></div>

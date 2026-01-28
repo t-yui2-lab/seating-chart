@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>座席配置オートメーション 6.5</title>
+    <title>座席配置オートメーション 6.8 (修正版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -25,12 +25,11 @@
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; background: #4f46e5; cursor: pointer; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
-        .block-container { background-color: #f8fafc; border: 2px solid #e2e8f0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05), 0 10px 15px -3px rgba(0,0,0,0.1); transition: all 0.3s ease; }
+        .block-container { background-color: #f8fafc; border: 2px solid #e2e8f0; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05), 0 10px 15px -3px rgba(0,0,0,0.1); transition: all 0.3s ease; position: relative; }
         .seat-empty { background-color: #ffffff; border: 1px solid #dee2e6; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
         .seat-disabled { background-color: #e2e8f0 !important; border: 2px dashed #cbd5e1 !important; color: #64748b !important; opacity: 0.6; }
-        .seat-reserved { background-color: #f1f5f9; border: 1px dashed #cbd5e1; color: #94a3b8; }
+        .seat-reserved { background-color: #fffbeb !important; border: 2px solid #fbbf24 !important; color: #b45309 !important; box-shadow: 0 0 10px rgba(251, 191, 36, 0.2); }
         .modal-overlay { background-color: rgba(15, 23, 42, 0.7); backdrop-filter: blur(8px); }
-        .status-card { background: white; border: 1px solid #e2e8f0; padding: 0.5rem 1rem; border-radius: 1rem; display: flex; flex-direction: column; align-items: center; min-width: 80px; }
         .dragging { opacity: 0.4; transform: scale(0.95); z-index: 50; }
         .drop-target { border: 3px solid #6366f1 !important; background-color: #eef2ff !important; transform: scale(1.05); z-index: 30; }
     </style>
@@ -59,12 +58,14 @@
                 search: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
                 up: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="18 15 12 9 6 15"/></svg>,
                 mouse: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="5" y="2" width="14" height="20" rx="7"/><line x1="12" y1="6" x2="12" y2="10"/></svg>,
-                star: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                star: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+                select: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="18" height="10" x="3" y="7" rx="2"/><path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/></svg>
             };
             return icons[name] || null;
         };
 
         const App = () => {
+            // --- State ---
             const [employees, setEmployees] = useState([]);
             const [employeeInput, setEmployeeInput] = useState('');
             const [searchTerm, setSearchTerm] = useState('');
@@ -74,49 +75,66 @@
             const [isSaving, setIsSaving] = useState(false);
             const [draggedKey, setDraggedKey] = useState(null); 
             const [dropTargetKey, setDropTargetKey] = useState(null); 
-            
             const [limitCount, setLimitCount] = useState(60); 
-            const [awardWinnerCount, setAwardWinnerCount] = useState(0); 
             const [sortPriority, setSortPriority] = useState(['type', 'code', 'dept']); 
             const [placementPattern, setPlacementPattern] = useState('full'); 
-            
             const [selectedSeat, setSelectedSeat] = useState(null); 
             const [disabledSeats, setDisabledSeats] = useState(new Set()); 
             const [reservedSeats, setReservedSeats] = useState(new Set()); 
             const [editMode, setEditMode] = useState('swap'); 
             const [assignments, setAssignments] = useState({});
             const [undoStack, setUndoStack] = useState([]); 
-            
             const [blocks, setBlocks] = useState([{ id: 1, name: '中央メインブロック', rows: 8, cols: 6, capacity: 48 }]);
-
+            const [isSelecting, setIsSelecting] = useState(false);
+            const [selectionStart, setSelectionStart] = useState(null);
+            const [selectionEnd, setSelectionEnd] = useState(null);
             const [statusMessage, setStatusMessage] = useState({ text: '', type: '' });
             const [isViewMode, setIsViewMode] = useState(false);
 
-            // --- Canvas Environment Variables Safe Access ---
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'seating-automation-app-v6';
             const db = useRef(null);
 
+            // --- Computed Values (Fixed reference by moving to the top) ---
+            const stats = useMemo(() => {
+                const total = blocks.reduce((sum, b) => sum + b.capacity, 0);
+                const usable = total - disabledSeats.size;
+                const assigned = Object.keys(assignments).length;
+                return { total, usable, assigned, remaining: usable - assigned };
+            }, [blocks, assignments, disabledSeats]);
+
+            // --- Helper Functions ---
+            const getSeatStyles = (emp, isSelected, isHit, isSysReserved) => {
+                if (isSysReserved) return { backgroundColor: '#fffbeb', borderColor: '#fbbf24', borderStyle: 'solid', borderWidth: '2px' };
+                if (!emp) return { backgroundColor: '#ffffff', borderColor: '#cbd5e1' };
+                const type = (emp.type || "").trim();
+                let style = { backgroundColor: '#ffffff', borderColor: '#94a3b8', borderWidth: '2px' };
+                if (type.includes('役員')) { style.backgroundColor = '#be123c'; style.borderColor = '#fb7185'; style.color = '#ffffff'; } 
+                else if (type.includes('総合職')) { style.backgroundColor = '#fdf2f8'; style.borderColor = '#f472b6'; } 
+                else if (type.includes('TK')) { style.backgroundColor = '#eef2ff'; style.borderColor = '#818cf8'; } 
+                else if (type.includes('業務')) { style.backgroundColor = '#f0f9ff'; style.borderColor = '#38bdf8'; } 
+                else if (type.includes('AP') || type.includes('K')) { style.backgroundColor = '#f8fafc'; style.borderColor = '#94a3b8'; }
+                if (isSelected || isHit) { style.boxShadow = '0 0 0 6px rgba(99, 102, 241, 0.4)'; style.transform = 'translateY(-4px) scale(1.05)'; style.borderColor = '#6366f1'; style.zIndex = '40'; }
+                return style;
+            };
+
+            const pushToUndo = (current) => setUndoStack(prev => [JSON.stringify(current), ...prev].slice(0, 20));
+
+            // --- Effects ---
             useEffect(() => {
                 const params = new URLSearchParams(window.location.search);
                 if (params.get('mode') === 'view') setIsViewMode(true);
 
                 const initFirebase = async () => {
-                    // GitHubなどの外部で動かす際は設定がないため、クラッシュ防止のためのチェック
                     if (typeof window.Firebase === 'undefined') {
                         setTimeout(initFirebase, 500); 
                         return;
                     }
-                    if (typeof __firebase_config === 'undefined') {
-                        console.warn("Firebase configuration not found. Sync feature disabled.");
-                        return;
-                    }
-
+                    if (typeof __firebase_config === 'undefined') return;
                     const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, getFirestore, doc, onSnapshot } = window.Firebase;
                     const firebaseConfig = JSON.parse(__firebase_config);
                     const app = initializeApp(firebaseConfig);
                     const auth = getAuth(app);
                     db.current = getFirestore(app);
-
                     try {
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                             await signInWithCustomToken(auth, __initial_auth_token);
@@ -124,7 +142,6 @@
                             await signInAnonymously(auth);
                         }
                     } catch (e) { console.error("Auth error", e); }
-
                     const layoutDocRef = doc(db.current, 'artifacts', appId, 'public', 'data', 'layouts', 'main');
                     onSnapshot(layoutDocRef, (snapshot) => {
                         if (snapshot.exists()) {
@@ -134,7 +151,6 @@
                             setDisabledSeats(new Set(data.disabledSeats || []));
                             setReservedSeats(new Set(data.reservedSeats || []));
                             setLimitCount(data.limitCount || 60);
-                            setAwardWinnerCount(data.awardWinnerCount || 0);
                         }
                     }, (err) => console.error("Firestore Sync Error:", err));
                 };
@@ -150,13 +166,58 @@
 
             const showStatus = (text, type) => setStatusMessage({ text, type });
 
-            const pushToUndo = (current) => setUndoStack(prev => [JSON.stringify(current), ...prev].slice(0, 20));
+            // --- Event Handlers ---
             const handleUndo = () => {
                 if (undoStack.length === 0) return showStatus("履歴がありません", "error");
                 const [last, ...rest] = undoStack;
                 setAssignments(JSON.parse(last));
                 setUndoStack(rest);
                 showStatus("元に戻しました。", "success");
+            };
+
+            const handleMouseDown = (e, blockId, index) => {
+                if (editMode !== 'range' || isViewMode) return;
+                setIsSelecting(true);
+                setSelectionStart({ blockId, index, x: e.clientX, y: e.clientY });
+                setSelectionEnd({ x: e.clientX, y: e.clientY, index });
+            };
+
+            const handleMouseMove = (e) => {
+                if (!isSelecting) return;
+                setSelectionEnd(prev => ({ ...prev, x: e.clientX, y: e.clientY }));
+            };
+
+            const handleMouseEnterSeat = (idx) => {
+                if (!isSelecting) return;
+                setSelectionEnd(prev => ({ ...prev, index: idx }));
+            };
+
+            const finalizeRangeSelection = () => {
+                if (!selectionStart || selectionEnd?.index === undefined) return;
+                pushToUndo(assignments);
+                const blockId = selectionStart.blockId;
+                const block = blocks.find(b => b.id === blockId);
+                const i1 = selectionStart.index, i2 = selectionEnd.index;
+                const r1 = Math.floor(i1 / block.cols), c1 = i1 % block.cols;
+                const r2 = Math.floor(i2 / block.cols), c2 = i2 % block.cols;
+                const minR = Math.min(r1, r2), maxR = Math.max(r1, r2);
+                const minC = Math.min(c1, c2), maxC = Math.max(c1, c2);
+
+                const nextReserved = new Set(reservedSeats);
+                const nextAssignments = { ...assignments };
+                for (let r = minR; r <= maxR; r++) {
+                    for (let c = minC; c <= maxC; c++) {
+                        const key = `${blockId}-${r * block.cols + c}`;
+                        if (!disabledSeats.has(key)) {
+                            if (nextReserved.has(key)) nextReserved.delete(key);
+                            else { nextReserved.add(key); delete nextAssignments[key]; }
+                        }
+                    }
+                }
+                setReservedSeats(nextReserved);
+                setAssignments(nextAssignments);
+                setSelectionStart(null);
+                setSelectionEnd(null);
             };
 
             const onDragStart = (key) => { if (isViewMode || editMode !== 'swap') return; setDraggedKey(key); };
@@ -175,18 +236,17 @@
                 }
                 setAssignments(next);
                 setDraggedKey(null); setDropTargetKey(null);
-                showStatus("座席を移動しました。", "success");
             };
 
             const handleSave = async () => {
                 const { doc, setDoc } = window.Firebase;
-                if (!db.current) return showStatus("クラウド設定がありません", "error");
+                if (!db.current) return showStatus("接続設定がありません", "error");
                 setIsSaving(true);
                 try {
                     const layoutDocRef = doc(db.current, 'artifacts', appId, 'public', 'data', 'layouts', 'main');
                     await setDoc(layoutDocRef, { 
                         assignments, blocks, disabledSeats: Array.from(disabledSeats), reservedSeats: Array.from(reservedSeats),
-                        limitCount, awardWinnerCount, updatedAt: new Date().toISOString() 
+                        limitCount, updatedAt: new Date().toISOString() 
                     });
                     showStatus("クラウドに保存しました。", "success");
                 } catch (e) { showStatus("保存エラー", "error"); }
@@ -195,23 +255,11 @@
 
             const copyAttendeeUrl = () => {
                 const url = new URL(window.location.href); url.searchParams.set('mode', 'view');
-                const urlStr = url.toString();
-                if (urlStr.startsWith('file://')) {
-                    showStatus("⚠️ GitHubへアップロードし、https:// で開く必要があります。", "error");
-                    return;
-                }
-                const textArea = document.createElement("textarea"); textArea.value = urlStr; document.body.appendChild(textArea); textArea.select();
+                const textArea = document.createElement("textarea"); textArea.value = url.toString(); document.body.appendChild(textArea); textArea.select();
                 try { document.execCommand('copy'); showStatus("来場者用URLをコピーしました。", "success"); } 
                 catch (err) { console.error('Copy failed', err); }
                 document.body.removeChild(textArea);
             };
-
-            const stats = useMemo(() => {
-                const total = blocks.reduce((sum, b) => sum + b.capacity, 0);
-                const usable = total - disabledSeats.size;
-                const assigned = Object.keys(assignments).length;
-                return { total, usable, assigned, remaining: usable - assigned };
-            }, [blocks, assignments, disabledSeats]);
 
             const processFile = (file) => {
                 if (!file) return;
@@ -248,9 +296,7 @@
                     return p.length < 2 ? null : { id: `m-${Date.now()}-${i}`, code: p[0]||'', name: p[1]||'', type: p[2]||'', dept: p[3]||'' };
                 }).filter(Boolean);
                 if (list.length === 0) return showStatus("名簿が空です。", "error");
-                
                 pushToUndo(assignments);
-                
                 list.sort((a, b) => {
                     for (const key of sortPriority) {
                         if (key === 'type') {
@@ -270,38 +316,38 @@
                     }
                     return 0;
                 });
-
                 const filtered = list.slice(0, limitCount);
-                const next = {}; const nextReserved = new Set();
-                let curEmp = 0; let curReserved = 0;
-
+                const next = {}; let curEmp = 0;
                 blocks.forEach(b => {
                     for(let r = 0; r < b.rows; r++) {
                         for(let c = 0; c < b.cols; c++) {
                             const s = r * b.cols + c; const k = `${b.id}-${s}`;
-                            if (disabledSeats.has(k)) continue;
+                            if (disabledSeats.has(k) || reservedSeats.has(k)) continue;
                             let skipByPattern = false;
                             if (placementPattern === 'skip') { if ((r + c) % 2 !== 0) skipByPattern = true; } 
                             else if (placementPattern === 'desk2-3') { if (c % 3 === 1) skipByPattern = true; }
-
-                            if (!skipByPattern) {
-                                if (curReserved < awardWinnerCount) { nextReserved.add(k); curReserved++; } 
-                                else if (curEmp < filtered.length) { next[k] = filtered[curEmp]; curEmp++; }
+                            if (!skipByPattern && curEmp < filtered.length) {
+                                next[k] = filtered[curEmp]; curEmp++;
                             }
                         }
                     }
                 });
-                setAssignments(next); setReservedSeats(nextReserved);
-                showStatus(`予約 ${curReserved}席 / 配置 ${curEmp}名`, "success");
+                setAssignments(next);
+                showStatus(`${curEmp}名を配置しました。予約席はキープされています。`, "success");
             };
 
             const handleSeatClick = (blockId, index) => {
-                if (isViewMode) return;
+                if (isViewMode || editMode === 'range') return;
                 const key = `${blockId}-${index}`;
                 if (editMode === 'block') {
                     pushToUndo(assignments);
                     const next = new Set(disabledSeats);
-                    if (next.has(key)) next.delete(key); else { next.add(key); const na = {...assignments}; delete na[key]; setAssignments(na); }
+                    if (next.has(key)) next.delete(key); 
+                    else { 
+                        next.add(key); 
+                        const na = {...assignments}; delete na[key]; setAssignments(na); 
+                        const nr = new Set(reservedSeats); nr.delete(key); setReservedSeats(nr);
+                    }
                     setDisabledSeats(next);
                 } else {
                     if (disabledSeats.has(key)) return;
@@ -321,24 +367,10 @@
             const removeBlock = (id) => blocks.length > 1 && setBlocks(blocks.filter(b => b.id !== id));
             const movePriorityToTop = (key) => setSortPriority(prev => [key, ...prev.filter(k => k !== key)]);
 
-            const getSeatStyles = (emp, isSelected, isHit, isSystemReserved) => {
-                if (isSystemReserved) return { backgroundColor: '#f8fafc', borderColor: '#e2e8f0', borderStyle: 'dashed' };
-                if (!emp) return { backgroundColor: '#ffffff', borderColor: '#cbd5e1' };
-                const type = (emp.type || "").trim();
-                let style = { backgroundColor: '#ffffff', borderColor: '#94a3b8', borderWidth: '2px' };
-                if (type.includes('役員')) { style.backgroundColor = '#be123c'; style.borderColor = '#fb7185'; style.color = '#ffffff'; } 
-                else if (type.includes('総合職')) { style.backgroundColor = '#fdf2f8'; style.borderColor = '#f472b6'; } 
-                else if (type.includes('TK')) { style.backgroundColor = '#eef2ff'; style.borderColor = '#818cf8'; } 
-                else if (type.includes('業務')) { style.backgroundColor = '#f0f9ff'; style.borderColor = '#38bdf8'; } 
-                else if (type.includes('AP') || type.includes('K')) { style.backgroundColor = '#f8fafc'; style.borderColor = '#94a3b8'; }
-                if (isSelected || isHit) { style.boxShadow = '0 0 0 6px rgba(99, 102, 241, 0.4)'; style.transform = 'translateY(-4px) scale(1.05)'; style.borderColor = '#6366f1'; style.zIndex = '40'; }
-                return style;
-            };
-
             return (
-                <div className={`p-4 md:p-8 max-w-[1800px] mx-auto min-h-screen ${isViewMode ? 'bg-slate-50' : 'bg-slate-100'}`}>
+                <div className={`p-4 md:p-8 max-w-[1800px] mx-auto min-h-screen ${isViewMode ? 'bg-slate-50' : 'bg-slate-100'}`} onMouseMove={handleMouseMove} onMouseUp={() => { if(isSelecting) finalizeRangeSelection(); setIsSelecting(false); }}>
                     {showResetConfirm && (
-                        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 modal-overlay">
+                        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white p-10 rounded-[40px] shadow-2xl max-w-sm w-full border text-center animate-in">
                                 <h3 className="text-2xl font-black mb-6 italic text-slate-800">配置を全てクリアしますか？</h3>
                                 <div className="flex gap-4">
@@ -353,7 +385,7 @@
                         <div className="flex items-center gap-5">
                             <div className="bg-indigo-600 text-white p-4 rounded-[24px] shadow-xl shadow-indigo-200"><Icon name="layout" className="w-10 h-10" /></div>
                             <div>
-                                <h1 className="text-3xl md:text-5xl font-black text-slate-800 tracking-tighter italic leading-none uppercase tracking-widest">座席配置 Ver 6.5</h1>
+                                <h1 className="text-3xl md:text-5xl font-black text-slate-800 tracking-tighter italic leading-none uppercase">座席配置 Ver 6.8</h1>
                                 <div className="flex items-center gap-3 mt-3">
                                     <div className="status-card border-indigo-100 bg-indigo-50/50"><span className="text-[9px] font-black text-indigo-400">総座席数</span><span className="text-lg font-black text-indigo-700">{stats.total}</span></div>
                                     <div className="status-card border-slate-100 bg-white"><span className="text-[9px] font-black text-slate-400">配置済</span><span className="text-lg font-black text-indigo-700">{stats.assigned}</span></div>
@@ -364,7 +396,7 @@
                         <div className="flex flex-wrap gap-4 bg-white p-4 rounded-[36px] shadow-xl border border-slate-200/50 font-bold">
                             {!isViewMode ? (
                                 <>
-                                    <button onClick={handleUndo} disabled={undoStack.length === 0} className={`px-5 py-3 text-sm font-bold rounded-2xl transition-all flex items-center gap-2 ${undoStack.length === 0 ? 'text-slate-200' : 'text-indigo-600 hover:bg-indigo-50'}`}><Icon name="undo" />元に戻す</button>
+                                    <button onClick={handleUndo} disabled={undoStack.length === 0} className={`px-5 py-3 text-sm font-bold rounded-2xl transition-all flex items-center gap-2 ${undoStack.length === 0 ? 'text-slate-200' : 'text-indigo-600 hover:bg-indigo-50'}`}><Icon name="undo" />戻す</button>
                                     <button onClick={() => setShowResetConfirm(true)} className="px-5 py-3 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-2xl flex items-center gap-2"><Icon name="rotate" />リセット</button>
                                     <button onClick={handleSave} disabled={isSaving} className={`px-8 py-3 text-sm font-black bg-emerald-600 text-white rounded-2xl shadow-lg flex items-center gap-2 ${isSaving ? 'opacity-50' : 'hover:bg-emerald-700 hover:scale-105 active:scale-95'} transition-all`}><Icon name="save" /> {isSaving ? '保存中...' : '保存して公開'}</button>
                                     <button onClick={copyAttendeeUrl} className="px-6 py-3 text-sm font-bold bg-white border border-slate-200 rounded-2xl flex items-center gap-2 hover:bg-slate-50 active:scale-95 transition-all"><Icon name="share" /> URLコピー</button>
@@ -388,9 +420,10 @@
                                     <div className="absolute left-5 top-8 text-indigo-400"><Icon name="search" className="w-6 h-6" /></div>
                                 </div>
                                 {!isViewMode && (
-                                    <div className="grid grid-cols-2 gap-2 font-bold text-[12px] pt-4 border-t border-slate-50">
-                                        <button onClick={() => setEditMode('swap')} className={`py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-1 ${editMode === 'swap' ? 'border-indigo-600 bg-indigo-50 text-indigo-600 shadow-sm' : 'border-slate-100 text-slate-400 hover:border-slate-200'}`}><Icon name="layout" /><span>移動/入替</span></button>
-                                        <button onClick={() => setEditMode('block')} className={`py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-1 ${editMode === 'block' ? 'border-rose-600 bg-rose-50 text-rose-600 shadow-sm' : 'border-slate-100 text-slate-400 hover:border-slate-200'}`}><Icon name="ban" /><span>席塞ぐ</span></button>
+                                    <div className="grid grid-cols-3 gap-2 font-bold text-[10px] pt-4 border-t border-slate-50">
+                                        <button onClick={() => setEditMode('swap')} className={`py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-1 ${editMode === 'swap' ? 'border-indigo-600 bg-indigo-50 text-indigo-600 shadow-sm' : 'border-slate-100 text-slate-400 hover:border-slate-200'}`}><Icon name="layout" /><span>移動</span></button>
+                                        <button onClick={() => setEditMode('block')} className={`py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-1 ${editMode === 'block' ? 'border-rose-600 bg-rose-50 text-rose-600 shadow-sm' : 'border-slate-100 text-slate-400 hover:border-slate-200'}`}><Icon name="ban" /><span>封鎖</span></button>
+                                        <button onClick={() => setEditMode('range')} className={`py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-1 ${editMode === 'range' ? 'border-amber-600 bg-amber-50 text-amber-600 shadow-sm' : 'border-slate-100 text-slate-400 hover:border-slate-200'}`}><Icon name="select" /><span>範囲指定</span></button>
                                     </div>
                                 )}
                             </div>
@@ -398,18 +431,18 @@
                             {!isViewMode && (
                                 <>
                                     <div className="bg-white p-7 rounded-[40px] shadow-lg border border-slate-200/60 space-y-5">
-                                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2 pb-2 border-b border-slate-50"><Icon name="zap" className="w-3 h-3"/> 1. 配置ルール</h3>
-                                        <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 shadow-sm">
-                                            <label className="text-[10px] font-black text-amber-600 uppercase flex items-center gap-2 mb-2"><Icon name="star" className="w-3 h-3" /> 受賞者用予約席数</label>
-                                            <input type="number" min="0" value={awardWinnerCount} onChange={(e) => setAwardWinnerCount(parseInt(e.target.value)||0)} className="w-full p-3 bg-white border border-amber-200 rounded-xl font-black text-lg text-center text-amber-700 outline-none" />
-                                        </div>
-                                        <div className="space-y-4 pt-2">
+                                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2 pb-2 border-b border-slate-50"><Icon name="zap" className="w-3 h-3"/> 1. 自動配置ルール</h3>
+                                        <div className="space-y-4">
                                             <label className="text-[10px] font-black text-slate-400 uppercase ml-1 block">配置パターン</label>
                                             <div className="grid grid-cols-1 gap-2">
                                                 <button onClick={() => setPlacementPattern('full')} className={`py-2.5 px-4 rounded-2xl text-[10px] font-bold border-2 transition-all ${placementPattern === 'full' ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-100 text-slate-400'}`}>すべて埋める</button>
                                                 <button onClick={() => setPlacementPattern('skip')} className={`py-2.5 px-4 rounded-2xl text-[10px] font-bold border-2 transition-all ${placementPattern === 'skip' ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-100 text-slate-400'}`}>一つ飛ばし</button>
                                                 <button onClick={() => setPlacementPattern('desk2-3')} className={`py-2.5 px-4 rounded-2xl text-[10px] font-bold border-2 transition-all ${placementPattern === 'desk2-3' ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-100 text-slate-400'}`}>3人掛け両端</button>
                                             </div>
+                                        </div>
+                                        <div className="pt-4 border-t border-slate-50">
+                                            <label className="text-[11px] font-black text-slate-400 uppercase ml-1">一般配置人数</label>
+                                            <input type="number" value={limitCount} onChange={(e) => setLimitCount(parseInt(e.target.value)||0)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-[20px] font-black text-xl text-center text-indigo-600 focus:ring-2 focus:ring-indigo-500 outline-none" />
                                         </div>
                                     </div>
 
@@ -420,7 +453,7 @@
                                             <span className="text-[11px] font-black text-slate-500">Excel/CSVをドロップ</span>
                                             <input type="file" className="hidden" accept=".xlsx,.csv" onChange={e => processFile(e.target.files[0])} />
                                         </label>
-                                        <textarea className="w-full h-40 p-4 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-[24px] outline-none" value={employeeInput} onChange={(e) => setEmployeeInput(e.target.value)} />
+                                        <textarea className="w-full h-40 p-4 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-[24px] outline-none overflow-x-auto" value={employeeInput} onChange={(e) => setEmployeeInput(e.target.value)} />
                                         <button onClick={handleParseManual} className="w-full py-3 bg-slate-800 text-white rounded-2xl font-black text-[11px] shadow-lg active:scale-95 transition-all">反映（手動修正）</button>
                                     </div>
 
@@ -430,15 +463,15 @@
                                             {blocks.map(b => (
                                                 <div key={b.id} className="p-5 bg-slate-50 rounded-[28px] border border-slate-200 relative group/blk shadow-sm">
                                                     <button onClick={() => removeBlock(b.id)} className="absolute top-3 right-3 opacity-0 group-hover/blk:opacity-100 text-slate-300 hover:text-rose-500 transition-all"><Icon name="trash" /></button>
-                                                    <input className="bg-transparent border-none text-[12px] font-black w-full p-0 text-slate-700" value={b.name} onChange={e => updateBlock(b.id, 'name', e.target.value)} />
+                                                    <input className="bg-transparent border-none text-[12px] font-black w-full p-0 text-slate-700 focus:ring-0" value={b.name} onChange={e => updateBlock(b.id, 'name', e.target.value)} />
                                                     <div className="flex gap-3 mt-3 text-center">
-                                                        <div className="flex-1"><label className="text-[9px] text-slate-400 font-bold block">Rows</label><input type="number" className="w-full p-2 bg-white text-xs border rounded-xl font-bold" value={b.rows} onChange={e => updateBlock(b.id, 'rows', parseInt(e.target.value)||1)} /></div>
-                                                        <div className="flex-1"><label className="text-[9px] text-slate-400 font-bold block">Cols</label><input type="number" className="w-full p-2 bg-white text-xs border rounded-xl font-bold" value={b.cols} onChange={e => updateBlock(b.id, 'cols', parseInt(e.target.value)||1)} /></div>
+                                                        <div className="flex-1"><label className="text-[9px] text-slate-400 font-bold block uppercase tracking-tighter">Rows</label><input type="number" className="w-full p-2 bg-white text-xs border rounded-xl font-bold" value={b.rows} onChange={e => updateBlock(b.id, 'rows', parseInt(e.target.value)||1)} /></div>
+                                                        <div className="flex-1"><label className="text-[9px] text-slate-400 font-bold block uppercase tracking-tighter">Cols</label><input type="number" className="w-full p-2 bg-white text-xs border rounded-xl font-bold" value={b.cols} onChange={e => updateBlock(b.id, 'cols', parseInt(e.target.value)||1)} /></div>
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
-                                        <button onClick={addBlock} className="w-full py-4 border-2 border-dashed border-indigo-200 rounded-[24px] text-indigo-500 text-[11px] font-black active:scale-95 flex items-center justify-center gap-2"><Icon name="plus" /> ブロック追加</button>
+                                        <button onClick={addBlock} className="w-full py-4 border-2 border-dashed border-indigo-200 rounded-[24px] text-indigo-500 text-[11px] font-black active:scale-95 flex items-center justify-center gap-2 transition-all hover:bg-indigo-50"><Icon name="plus" /> ブロック追加</button>
                                         <div className="pt-4 border-t border-slate-50">
                                             <input type="range" min="70" max="160" value={seatSize} onChange={e => setSeatSize(parseInt(e.target.value))} className="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                                         </div>
@@ -448,7 +481,7 @@
                         </div>
 
                         {/* Main View Area */}
-                        <div className="lg:col-span-9 bg-white rounded-[80px] shadow-2xl border border-slate-200/50 p-6 md:p-12 min-h-[1000px] overflow-auto relative">
+                        <div className="lg:col-span-9 bg-white rounded-[80px] shadow-2xl border border-slate-200/50 p-6 md:p-12 min-h-[1000px] overflow-auto relative select-none">
                             <div className="max-w-4xl mx-auto mb-24 relative">
                                 <div className="bg-slate-800 text-white py-8 rounded-b-[50px] font-black text-center shadow-2xl tracking-[1.5em] text-lg relative z-20 border-b-8 border-slate-900 uppercase">Stage / ステージ</div>
                                 <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-40 bg-indigo-500/5 blur-[80px] rounded-full pointer-events-none"></div>
@@ -464,14 +497,37 @@
                                                 const res = reservedSeats.has(key);
                                                 const seatStyle = getSeatStyles(emp, isSel, hit, res);
                                                 
+                                                // 範囲選択中の強調表示
+                                                const isInSelection = isSelecting && selectionStart?.blockId === b.id && ( (r, c, r1, c1, r2, c2) => {
+                                                    const minR = Math.min(r1, r2), maxR = Math.max(r1, r2);
+                                                    const minC = Math.min(c1, c2), maxC = Math.max(c1, c2);
+                                                    return r >= minR && r <= maxR && c >= minC && c <= maxC;
+                                                })(Math.floor(i/b.cols), i%b.cols, Math.floor(selectionStart.index/b.cols), selectionStart.index%b.cols, Math.floor((selectionEnd?.index??selectionStart.index)/b.cols), (selectionEnd?.index??selectionStart.index)%b.cols);
+
                                                 return (
                                                     <div 
-                                                        key={i} draggable={!isViewMode && emp && editMode === 'swap'} onDragStart={() => onDragStart(key)} onDragOver={(e) => onDragOverTarget(e, key)} onDragLeave={onDragLeave} onDrop={(e) => onDropOnSeat(e, key)} onClick={() => handleSeatClick(b.id, i)} 
-                                                        className={`transition-all duration-300 flex flex-col items-center justify-center border relative group cursor-pointer rounded-[28px] shadow-sm ${dis ? 'seat-disabled' : res ? 'seat-reserved' : !emp ? 'seat-empty' : ''} ${draggedKey === key ? 'dragging' : ''} ${dropTargetKey === key ? 'drop-target' : ''}`} 
+                                                        key={i} 
+                                                        draggable={!isViewMode && emp && editMode === 'swap'} 
+                                                        onDragStart={() => onDragStart(key)} 
+                                                        onDragOver={(e) => onDragOverTarget(e, key)} 
+                                                        onDragLeave={onDragLeave} 
+                                                        onDrop={(e) => onDropOnSeat(e, key)} 
+                                                        onMouseDown={(e) => handleMouseDown(e, b.id, i)}
+                                                        onMouseEnter={() => handleMouseEnterSeat(i)}
+                                                        onClick={() => handleSeatClick(b.id, i)} 
+                                                        className={`transition-all duration-300 flex flex-col items-center justify-center border relative group cursor-pointer rounded-[28px] shadow-sm 
+                                                            ${dis ? 'seat-disabled' : res ? 'seat-reserved' : !emp ? 'seat-empty' : ''} 
+                                                            ${draggedKey === key ? 'dragging' : ''} 
+                                                            ${dropTargetKey === key ? 'drop-target' : ''}
+                                                            ${isInSelection ? 'ring-4 ring-indigo-500 ring-offset-2 z-50' : ''}
+                                                        `} 
                                                         style={{ width: `${seatSize}px`, height: `${seatSize}px`, ...(!dis ? seatStyle : {}) }}
                                                     >
                                                         {dis ? (<Icon name="ban" className="w-5 h-5 opacity-50" />) : res ? (
-                                                            <div className="flex flex-col items-center gap-0.5 opacity-60"><Icon name="star" className="w-3 h-3 text-amber-500" /><span className="text-[8px] font-black tracking-tighter">予約席</span></div>
+                                                            <div className="flex flex-col items-center gap-0.5">
+                                                                <Icon name="star" className="w-4 h-4 text-amber-500 shadow-sm" />
+                                                                <span className="text-[9px] font-black tracking-tighter text-amber-600">受賞者席</span>
+                                                            </div>
                                                         ) : emp ? (
                                                             <div className="px-3 text-center w-full overflow-hidden select-none">
                                                                 <div className={`font-black leading-tight mb-1 truncate w-full ${seatSize < 90 ? 'text-[10px]' : 'text-[13px]'}`}>{emp.name}</div>

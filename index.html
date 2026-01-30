@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>座席配置オートメーション 7.4</title>
+    <title>座席配置オートメーション 7.5 (安定版)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -39,7 +39,6 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // 定数
         const PRIORITY_LABELS = { type: '雇用形態(ランク)', code: '社員番号(社歴)', dept: '部署' };
         const RANK_ORDER = ['役員', '総合職', 'TK職', '業務職', 'AP職', 'K職'];
         const DEFAULT_AWARD_GROUPS = [
@@ -48,14 +47,13 @@
             { id: 'award-3', name: '新人賞', color: '#60a5fa' }
         ];
 
-        // アイコンコンポーネント
         const Icon = ({ name, className = "w-4 h-4", style = {} }) => {
             const icons = {
                 layout: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" x2="21" y1="9" y2="9"/><line x1="9" x2="9" y1="21" y2="9"/></svg>,
                 zap: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
                 undo: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></svg>,
                 rotate: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>,
-                upload: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>,
+                download: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>,
                 save: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>,
                 share: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" x2="12" y1="2" x2="12" y2="15"/></svg>,
                 trash: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>,
@@ -114,24 +112,13 @@
                 return { total, usable, assigned, reserved: reservedCount, remaining: usable - assigned - reservedCount };
             }, [blocks, assignments, disabledSeats, reservedSeats]);
 
-            // --- UI Helpers ---
+            // --- Helper Functions ---
             const getSeatStyles = (emp, isSelected, isHit, reservedGroupId) => {
-                // 色分けバグ修正: reservedGroupIdに基づいて正しい色を取得
                 if (reservedGroupId) {
                     const group = awardGroups.find(g => g.id === reservedGroupId);
                     const baseColor = group ? group.color : '#fbbf24';
-                    let style = { 
-                        backgroundColor: `${baseColor}15`, 
-                        borderColor: baseColor, 
-                        borderStyle: 'solid', 
-                        borderWidth: '2.5px',
-                        boxShadow: `inset 0 0 10px ${baseColor}20`
-                    };
-                    if (isSelected || isHit) { 
-                        style.boxShadow = `0 0 0 6px ${baseColor}40`; 
-                        style.transform = 'translateY(-4px) scale(1.05)'; 
-                        style.zIndex = '40'; 
-                    }
+                    let style = { backgroundColor: `${baseColor}15`, borderColor: baseColor, borderStyle: 'solid', borderWidth: '2.5px', boxShadow: `inset 0 0 10px ${baseColor}20` };
+                    if (isSelected || isHit) { style.boxShadow = `0 0 0 6px ${baseColor}40`; style.transform = 'translateY(-4px) scale(1.05)'; style.zIndex = '40'; }
                     return style;
                 }
                 if (!emp) return { backgroundColor: '#ffffff', borderColor: '#cbd5e1' };
@@ -142,12 +129,7 @@
                 else if (type.includes('TK')) { style.backgroundColor = '#eef2ff'; style.borderColor = '#818cf8'; } 
                 else if (type.includes('業務')) { style.backgroundColor = '#f0f9ff'; style.borderColor = '#38bdf8'; } 
                 else if (type.includes('AP') || type.includes('K')) { style.backgroundColor = '#f8fafc'; style.borderColor = '#94a3b8'; }
-                if (isSelected || isHit) { 
-                    style.boxShadow = '0 0 0 6px rgba(99, 102, 241, 0.4)'; 
-                    style.transform = 'translateY(-4px) scale(1.05)'; 
-                    style.borderColor = '#6366f1'; 
-                    style.zIndex = '40'; 
-                }
+                if (isSelected || isHit) { style.boxShadow = '0 0 0 6px rgba(99, 102, 241, 0.4)'; style.transform = 'translateY(-4px) scale(1.05)'; style.borderColor = '#6366f1'; style.zIndex = '40'; }
                 return style;
             };
 
@@ -158,10 +140,8 @@
             const handleUndo = () => {
                 if (undoStack.length === 0) return;
                 const state = JSON.parse(undoStack[0]);
-                setAssignments(state.assignments);
-                setReservedSeats(state.reservedSeats);
-                setDisabledSeats(new Set(state.disabledSeats));
-                setUndoStack(prev => prev.slice(1));
+                setAssignments(state.assignments); setReservedSeats(state.reservedSeats);
+                setDisabledSeats(new Set(state.disabledSeats)); setUndoStack(prev => prev.slice(1));
                 showStatus("操作を戻しました。", "success");
             };
 
@@ -171,9 +151,7 @@
                 setIsSaving(true);
                 try {
                     const layoutDocRef = doc(db.current, 'artifacts', appId, 'public', 'data', 'layouts', 'main');
-                    await setDoc(layoutDocRef, { 
-                        assignments, blocks, disabledSeats: Array.from(disabledSeats), reservedSeats, awardGroups, limitCount, updatedAt: new Date().toISOString() 
-                    });
+                    await setDoc(layoutDocRef, { assignments, blocks, disabledSeats: Array.from(disabledSeats), reservedSeats, awardGroups, limitCount, updatedAt: new Date().toISOString() });
                     showStatus("クラウドに保存しました。", "success");
                 } catch (e) { showStatus("保存失敗", "error"); }
                 finally { setIsSaving(false); }
@@ -183,7 +161,30 @@
                 const url = new URL(window.location.href); url.searchParams.set('mode', 'view');
                 const textArea = document.createElement("textarea"); textArea.value = url.toString(); document.body.appendChild(textArea); textArea.select();
                 document.execCommand('copy'); document.body.removeChild(textArea);
-                showStatus("閲覧用URLをコピーしました。", "success");
+                showStatus("URLをコピーしました。", "success");
+            };
+
+            const exportVisualCSV = () => {
+                let csv = "STAGE / ステージ,,,,,\n\n";
+                blocks.forEach(b => {
+                    csv += `【${b.name}】\n`;
+                    for (let r = 0; r < b.rows; r++) {
+                        let rowData = [];
+                        for (let c = 0; c < b.cols; c++) {
+                            const key = `${b.id}-${r * b.cols + c}`, emp = assignments[key], resId = reservedSeats[key], dis = disabledSeats.has(key);
+                            const resName = resId ? awardGroups.find(g => g.id === resId)?.name : null;
+                            if (dis) rowData.push("(封鎖)");
+                            else if (emp) rowData.push(`"${emp.name}${resName ? ' ['+resName+']' : ''}\n(${emp.dept})"`);
+                            else if (resName) rowData.push(`"(${resName} 予約席)"`);
+                            else rowData.push("(空席)");
+                        }
+                        csv += rowData.join(",") + "\n";
+                    }
+                    csv += "\n";
+                });
+                const bom = new Uint8Array([0xEF, 0xBB, 0xBF]), blob = new Blob([bom, csv], { type: "text/csv;charset=utf-8" });
+                const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "会場座席表_レイアウト.csv"; link.click();
+                showStatus("Excel用CSVを出力しました。", "success");
             };
 
             const handleParseManual = () => {
@@ -209,7 +210,7 @@
                         setEmployees(parsed); 
                         setEmployeeInput(parsed.map(e => `${e.code}\t${e.name}\t${e.type}\t${e.dept}`).join('\n'));
                         showStatus(`${parsed.length}名のデータをExcelから読み込みました。`, 'success');
-                    } catch (e) { showStatus("Excel解析エラー", "error"); }
+                    } catch (e) { showStatus("Excel読込エラー", "error"); }
                 };
                 reader.readAsArrayBuffer(file);
             };
@@ -221,10 +222,7 @@
                 list.sort((a, b) => {
                     for (const key of sortPriority) {
                         if (key === 'type') {
-                            const getRank = (t) => {
-                                for(let i=0; i<RANK_ORDER.length; i++) if(t.includes(RANK_ORDER[i])) return i;
-                                return 99;
-                            };
+                            const getRank = (t) => { for(let i=0; i<RANK_ORDER.length; i++) if(t.includes(RANK_ORDER[i])) return i; return 99; };
                             const diff = getRank(a.type) - getRank(b.type); if (diff !== 0) return diff;
                         } else if (key === 'code') {
                             const diff = a.code.localeCompare(b.code, undefined, {numeric: true}); if (diff !== 0) return diff;
@@ -244,7 +242,7 @@
                         }
                     }
                 });
-                setAssignments(next); showStatus("ルール通りに自動配置しました。", "success");
+                setAssignments(next); showStatus("自動配置しました。", "success");
             };
 
             const saveIndividualEdit = () => {
@@ -252,9 +250,8 @@
                 pushToUndo();
                 const next = { ...assignments };
                 next[editingKey] = { ...next[editingKey], name: editingData.name, dept: editingData.dept };
-                setAssignments(next);
-                setEditingKey(null);
-                showStatus("座席情報を修正しました。", "success");
+                setAssignments(next); setEditingKey(null);
+                showStatus("修正しました。", "success");
             };
 
             const assignAwardWinners = () => {
@@ -264,7 +261,7 @@
                 const nextAssignments = { ...assignments };
                 const emptyKeys = Object.keys(reservedSeats).filter(k => reservedSeats[k] === selectedAwardId && !assignments[k]);
                 names.forEach((name, idx) => { if (emptyKeys[idx]) nextAssignments[emptyKeys[idx]] = { id: `award-${Date.now()}-${idx}`, name, dept: '受賞者', type: '受賞者', code: '0000' }; });
-                setAssignments(nextAssignments); setAwardForm(''); showStatus(`${names.length}名をエリアに配置しました。`, "success");
+                setAssignments(nextAssignments); setAwardForm(''); showStatus("受賞者を配置しました。", "success");
             };
 
             const updateBlockSize = (id, f, v) => setBlocks(blocks.map(b => {
@@ -300,12 +297,8 @@
                 initFirebase();
             }, []);
 
-            // --- Interactive Handlers ---
-            const handleMouseDown = (e, blockId, index) => {
-                if (editMode !== 'range' || isViewMode) return;
-                setIsSelecting(true); setSelectionStart({ blockId, index });
-                setSelectionEnd({ index });
-            };
+            // --- Interactions ---
+            const handleMouseDown = (e, blockId, index) => { if (editMode !== 'range' || isViewMode) return; setIsSelecting(true); setSelectionStart({ blockId, index }); setSelectionEnd({ index }); };
             const handleMouseEnterSeat = (idx) => { if (isSelecting) setSelectionEnd(prev => ({ ...prev, index: idx })); };
             const finalizeRangeSelection = () => {
                 if (!selectionStart || selectionEnd?.index === undefined) return;
@@ -362,12 +355,10 @@
 
             return (
                 <div className={`p-4 md:p-8 max-w-[1800px] mx-auto min-h-screen ${isViewMode ? 'bg-slate-50' : 'bg-slate-100'}`} onMouseUp={() => { if(isSelecting) finalizeRangeSelection(); setIsSelecting(false); }}>
-                    
-                    {/* 名前修正用モーダル */}
                     {editingKey && (
                         <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white p-8 rounded-[40px] shadow-2xl max-w-sm w-full border animate-in">
-                                <h3 className="text-xl font-black mb-6 flex items-center gap-2 text-slate-700"><Icon name="edit" className="text-indigo-600" /> 修正</h3>
+                                <h3 className="text-xl font-black mb-6 flex items-center gap-2 text-slate-700"><Icon name="edit" className="text-indigo-600" /> 座席修正</h3>
                                 <div className="space-y-4">
                                     <div><label className="text-[10px] font-black text-slate-400 uppercase ml-1">氏名</label><input className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black focus:ring-2 focus:ring-indigo-500 outline-none" value={editingData.name} onChange={e=>setEditingData({...editingData, name: e.target.value})} /></div>
                                     <div><label className="text-[10px] font-black text-slate-400 uppercase ml-1">部署</label><input className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black focus:ring-2 focus:ring-indigo-500 outline-none" value={editingData.dept} onChange={e=>setEditingData({...editingData, dept: e.target.value})} /></div>
@@ -376,12 +367,11 @@
                             </div>
                         </div>
                     )}
-
                     {showResetConfirm && (
                         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white p-10 rounded-[40px] shadow-2xl max-w-sm w-full border text-center">
                                 <h3 className="text-2xl font-black mb-6">全クリア？</h3>
-                                <div className="flex gap-4"><button onClick={() => setShowResetConfirm(false)} className="flex-1 py-4 rounded-2xl bg-slate-100 font-bold">戻る</button><button onClick={() => { pushToUndo(); setAssignments({}); setReservedSeats({}); setDisabledSeats(new Set()); setShowResetConfirm(false); }} className="flex-1 py-4 rounded-2xl bg-rose-600 text-white font-bold">クリア</button></div>
+                                <div className="flex gap-4"><button onClick={() => setShowResetConfirm(false)} className="flex-1 py-4 rounded-2xl bg-slate-100 font-bold text-slate-500">戻る</button><button onClick={() => { pushToUndo(); setAssignments({}); setReservedSeats({}); setDisabledSeats(new Set()); setShowResetConfirm(false); }} className="flex-1 py-4 rounded-2xl bg-rose-600 text-white font-bold">リセット</button></div>
                             </div>
                         </div>
                     )}
@@ -390,7 +380,7 @@
                         <div className="flex items-center gap-5">
                             <div className="bg-indigo-600 text-white p-4 rounded-[24px] shadow-xl"><Icon name="layout" className="w-10 h-10" /></div>
                             <div>
-                                <h1 className="text-3xl md:text-5xl font-black text-slate-800 tracking-tighter uppercase leading-none italic">座席配置 <span className="text-indigo-600 not-italic">7.4</span></h1>
+                                <h1 className="text-3xl md:text-5xl font-black text-slate-800 tracking-tighter uppercase leading-none italic">座席配置 7.5</h1>
                                 <div className="flex items-center gap-3 mt-3">
                                     <div className="status-card border-indigo-100 bg-indigo-50/50"><span className="text-[9px] font-black text-indigo-400">総数</span><span className="text-lg font-black text-indigo-700">{stats.total}</span></div>
                                     <div className="status-card border-slate-100 bg-white"><span className="text-[9px] font-black text-slate-400">配置済</span><span className="text-lg font-black text-indigo-700">{stats.assigned}</span></div>
@@ -398,7 +388,6 @@
                                 </div>
                             </div>
                         </div>
-                        
                         <div className="flex flex-wrap gap-4 bg-white p-4 rounded-[36px] shadow-xl border border-slate-200/50 font-bold">
                             {!isViewMode ? (
                                 <>
@@ -406,10 +395,11 @@
                                     <button onClick={() => setShowResetConfirm(true)} className="px-5 py-3 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-2xl flex items-center gap-2"><Icon name="rotate" />リセット</button>
                                     <button onClick={handleSave} disabled={isSaving} className={`px-8 py-3 text-sm font-black bg-emerald-600 text-white rounded-2xl shadow-lg flex items-center gap-2 ${isSaving ? 'opacity-50' : 'hover:bg-emerald-700'} transition-all`}><Icon name="save" /> {isSaving ? '保存中...' : '保存して公開'}</button>
                                     <button onClick={copyAttendeeUrl} className="px-6 py-3 text-sm font-bold bg-white border border-slate-200 rounded-2xl flex items-center gap-2 hover:bg-slate-50 transition-all"><Icon name="share" /> URLコピー</button>
+                                    <button onClick={exportVisualCSV} className="px-6 py-3 text-sm font-bold bg-slate-800 text-white rounded-2xl flex items-center gap-2 hover:bg-slate-900 shadow-lg"><Icon name="download" /> CSV出力</button>
                                     <button onClick={handleSmartAutoAssign} className="px-10 py-3 text-sm font-black bg-indigo-600 text-white rounded-2xl shadow-xl flex items-center gap-3 hover:bg-indigo-700 active:scale-95 shadow-indigo-200"><Icon name="zap" className="w-5 h-5" /> 自動配置</button>
                                 </>
                             ) : (
-                                <div className="flex items-center gap-4 px-4 py-1"><Icon name="search" className="text-indigo-400" /><p className="text-sm font-bold text-slate-500 italic">座席を検索してください</p></div>
+                                <div className="flex items-center gap-4 px-4 py-1"><Icon name="search" className="text-indigo-400" /><p className="text-sm font-bold text-slate-500 italic">名前を検索してください</p></div>
                             )}
                         </div>
                     </header>
@@ -417,62 +407,20 @@
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                         <div className={`lg:col-span-3 space-y-6 ${isViewMode ? 'hidden lg:block' : ''}`}>
                             <div className="bg-white p-7 rounded-[40px] shadow-lg border border-slate-200/60 space-y-5">
-                                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2 pb-2 border-b border-slate-50"><Icon name="search" className="w-3 h-3"/> 1. 検索・モード</h3>
-                                <div className="relative pt-2">
-                                    <input type="text" placeholder="名前を検索..." className="w-full p-5 pl-14 bg-slate-50 border-2 border-slate-100 rounded-[28px] outline-none focus:border-indigo-500 font-black transition-all text-lg shadow-inner" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
-                                    <div className="absolute left-5 top-8 text-indigo-400"><Icon name="search" className="w-6 h-6" /></div>
-                                </div>
-                                {!isViewMode && (
-                                    <div className="grid grid-cols-3 gap-2 font-bold text-[10px] pt-2">
-                                        <button onClick={() => setEditMode('swap')} className={`py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-1 ${editMode === 'swap' ? 'border-indigo-600 bg-indigo-50 text-indigo-600 shadow-sm' : 'border-slate-100 text-slate-400'}`}><Icon name="layout" /><span>移動/修正</span></button>
-                                        <button onClick={() => setEditMode('block')} className={`py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-1 ${editMode === 'block' ? 'border-rose-600 bg-rose-50 text-rose-600 shadow-sm' : 'border-slate-100 text-slate-400'}`}><Icon name="ban" /><span>封鎖</span></button>
-                                        <button onClick={() => setEditMode('range')} className={`py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-1 ${editMode === 'range' ? 'border-amber-600 bg-amber-50 text-amber-600 shadow-sm' : 'border-slate-100 text-slate-400'}`}><Icon name="select" /><span>賞指定</span></button>
-                                    </div>
-                                )}
+                                <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2 pb-2 border-b border-slate-50"><Icon name="search" className="w-3 h-3"/> 1. 検索・操作</h3>
+                                <div className="relative pt-2"><input type="text" placeholder="名前を検索..." className="w-full p-5 pl-14 bg-slate-50 border-2 border-slate-100 rounded-[28px] outline-none focus:border-indigo-500 font-black transition-all text-lg shadow-inner" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} /><div className="absolute left-5 top-8 text-indigo-400"><Icon name="search" className="w-6 h-6" /></div></div>
+                                {!isViewMode && (<div className="grid grid-cols-3 gap-2 font-bold text-[10px] pt-2"><button onClick={() => setEditMode('swap')} className={`py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-1 ${editMode === 'swap' ? 'border-indigo-600 bg-indigo-50 text-indigo-600 shadow-sm' : 'border-slate-100 text-slate-400'}`}><Icon name="layout" /><span>移動/修正</span></button><button onClick={() => setEditMode('block')} className={`py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-1 ${editMode === 'block' ? 'border-rose-600 bg-rose-50 text-rose-600 shadow-sm' : 'border-slate-100 text-slate-400'}`}><Icon name="ban" /><span>封鎖</span></button><button onClick={() => setEditMode('range')} className={`py-4 rounded-2xl border-2 transition-all flex flex-col items-center gap-1 ${editMode === 'range' ? 'border-amber-600 bg-amber-50 text-amber-600 shadow-sm' : 'border-slate-100 text-slate-400'}`}><Icon name="select" /><span>賞指定</span></button></div>)}
                             </div>
-
                             {!isViewMode && (
                                 <>
-                                    <div className="bg-white p-7 rounded-[40px] shadow-lg border border-slate-200/60 space-y-5 animate-in">
-                                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2 pb-2 border-b border-slate-50"><Icon name="star" className="w-3 h-3"/> 2. 賞エリア設定</h3>
-                                        <div className="space-y-2 max-h-48 overflow-auto pr-1 custom-scrollbar">
-                                            {awardGroups.map(group => (
-                                                <div key={group.id} onClick={() => setSelectedAwardId(group.id)} className={`p-3 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${selectedAwardId === group.id ? 'ring-2 ring-indigo-500 ring-offset-2' : 'opacity-70'}`} style={{ borderColor: group.color, backgroundColor: `${group.color}08` }}>
-                                                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: group.color }} />
-                                                    <input className="flex-1 bg-transparent font-black text-[11px] border-none p-0 focus:ring-0" value={group.name} onChange={(e) => setAwardGroups(awardGroups.map(g => g.id === group.id ? {...g, name: e.target.value} : g))} />
-                                                    <button onClick={(e) => { e.stopPropagation(); setAwardGroups(awardGroups.filter(g=>g.id!==group.id)); }} className="text-slate-300 hover:text-rose-500"><Icon name="trash" className="w-3 h-3"/></button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        <button onClick={() => setAwardGroups([...awardGroups,{id:`aw-${Date.now()}`,name:'新しい賞',color:'#'+Math.floor(Math.random()*16777215).toString(16)}])} className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-[10px] font-bold">+ 賞追加</button>
-                                        <div className="pt-2"><textarea className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-[10px] min-h-[60px] outline-none" placeholder="受賞者名を改行で入力" value={awardForm} onChange={e => setAwardForm(e.target.value)} /><button onClick={assignAwardWinners} className="w-full mt-2 py-3 bg-amber-500 text-white rounded-xl text-[10px] font-black shadow-lg shadow-amber-100 hover:bg-amber-600 transition-all active:scale-95">エリアへ一括流し込み</button></div>
-                                    </div>
-
-                                    <div className="bg-white p-7 rounded-[40px] shadow-lg border border-slate-200/60 space-y-6">
-                                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2 pb-2 border-b border-slate-50"><Icon name="zap" className="w-3 h-3"/> 3. 配置ルール</h3>
-                                        <div className="space-y-4">
-                                            <div className="grid grid-cols-1 gap-2"><button onClick={() => setPlacementPattern('full')} className={`py-2.5 px-4 rounded-2xl text-[10px] font-bold border-2 ${placementPattern === 'full' ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-100 text-slate-400'}`}>すべて埋める</button><button onClick={() => setPlacementPattern('skip')} className={`py-2.5 px-4 rounded-2xl text-[10px] font-bold border-2 ${placementPattern === 'skip' ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-100 text-slate-400'}`}>一つ飛ばし</button><button onClick={() => setPlacementPattern('desk2-3')} className={`py-2.5 px-4 rounded-2xl text-[10px] font-bold border-2 ${placementPattern === 'desk2-3' ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-100 text-slate-400'}`}>3人掛け両端</button></div>
-                                            <div className="space-y-2 pt-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">ソート優先順位</label>{sortPriority.map((key, index) => (<div key={key} className="flex items-center gap-3 bg-slate-50 p-3 rounded-2xl border transition-all"><div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black ${index === 0 ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-200 text-slate-400'}`}>{index + 1}</div><span className="flex-1 text-[10px] font-black text-slate-700">{PRIORITY_LABELS[key]}</span>{index > 0 && <button onClick={() => setSortPriority(prev => [key, ...prev.filter(k => k !== key)])} className="p-1.5 bg-white border border-slate-200 rounded-xl text-indigo-600 hover:bg-indigo-50"><Icon name="up" className="w-3 h-3"/></button>}</div>))}</div>
-                                        </div>
-                                    </div>
-
-                                    <div className="bg-white p-7 rounded-[40px] shadow-lg border border-slate-200/60 space-y-5 animate-in">
-                                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2 pb-2 border-b border-slate-50"><Icon name="upload" className="w-3 h-3"/> 4. 名簿読込</h3>
-                                        <label className={`flex flex-col items-center justify-center w-full h-32 border-3 border-dashed rounded-[32px] cursor-pointer transition-all border-slate-200 hover:bg-slate-50`}><Icon name="upload" className="text-slate-400 w-6 h-6 mb-2" /><span className="text-[11px] font-black text-slate-500 uppercase tracking-tighter">Excel/CSVをドロップ</span><input type="file" className="hidden" accept=".xlsx,.csv" onChange={e => processFile(e.target.files[0])} /></label>
-                                        <textarea className="w-full h-40 p-4 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-[24px] outline-none" value={employeeInput} onChange={(e) => setEmployeeInput(e.target.value)} /><button onClick={handleParseManual} className="w-full py-3 bg-slate-800 text-white rounded-2xl font-black text-[11px] shadow-lg active:scale-95">名簿解析</button>
-                                    </div>
-
-                                    <div className="bg-white p-7 rounded-[40px] shadow-lg border border-slate-200/60 space-y-5 animate-in">
-                                        <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2 pb-2 border-b border-slate-50"><Icon name="plus" className="w-3 h-3"/> 5. 会場構成</h3>
-                                        <div className="space-y-3 max-h-48 overflow-auto pr-1 custom-scrollbar">{blocks.map(b => (<div key={b.id} className="p-5 bg-slate-50 rounded-[28px] border border-slate-200 relative group/blk shadow-sm"><button onClick={() => setBlocks(blocks.filter(x=>x.id!==b.id))} className="absolute top-3 right-3 opacity-0 group-hover/blk:opacity-100 text-slate-300 hover:text-rose-500 transition-all"><Icon name="trash" /></button><input className="bg-transparent border-none text-[12px] font-black w-full p-0 text-slate-700 outline-none focus:ring-0" value={b.name} onChange={e => setBlocks(blocks.map(x=>x.id===b.id?{...x,name:e.target.value}:x))} /><div className="flex gap-3 mt-3 text-center"><div className="flex-1"><label className="text-[9px] text-slate-400 font-bold block uppercase tracking-tighter">Rows</label><input type="number" className="w-full p-2 bg-white text-xs border rounded-xl font-bold" value={b.rows} onChange={e => updateBlockSize(b.id, 'rows', parseInt(e.target.value)||1)} /></div><div className="flex-1"><label className="text-[9px] text-slate-400 font-bold block uppercase tracking-tighter">Cols</label><input type="number" className="w-full p-2 bg-white text-xs border rounded-xl font-bold" value={b.cols} onChange={e => updateBlockSize(b.id, 'cols', parseInt(e.target.value)||1)} /></div></div></div>))}</div>
-                                        <button onClick={() => setBlocks([...blocks, { id: Date.now(), name: `新ブロック`, rows: 5, cols: 6, capacity: 30 }])} className="w-full py-4 border-2 border-dashed border-indigo-200 rounded-[24px] text-indigo-500 text-[11px] font-black active:scale-95 flex items-center justify-center gap-2 hover:bg-indigo-50 transition-all"><Icon name="plus" /> ブロック追加</button>
-                                        <div className="pt-4 border-t border-slate-50"><input type="range" min="70" max="160" value={seatSize} onChange={e => setSeatSize(parseInt(e.target.value))} className="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" /></div>
-                                    </div>
+                                    <div className="bg-white p-7 rounded-[40px] shadow-lg border border-slate-200/60 space-y-5 animate-in"><h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2 pb-2 border-b border-slate-50"><Icon name="star" className="w-3 h-3"/> 2. 賞エリア設定</h3><div className="space-y-2 max-h-48 overflow-auto pr-1 custom-scrollbar">{awardGroups.map(group => (<div key={group.id} onClick={() => setSelectedAwardId(group.id)} className={`p-3 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${selectedAwardId === group.id ? 'ring-2 ring-indigo-500 ring-offset-2' : 'opacity-70'}`} style={{ borderColor: group.color, backgroundColor: `${group.color}08` }}><div className="w-4 h-4 rounded-full" style={{ backgroundColor: group.color }} /><input className="flex-1 bg-transparent font-black text-[11px] border-none p-0 focus:ring-0" value={group.name} onChange={(e) => setAwardGroups(awardGroups.map(g => g.id === group.id ? {...g, name: e.target.value} : g))} /><button onClick={(e) => { e.stopPropagation(); setAwardGroups(awardGroups.filter(g=>g.id!==group.id)); }} className="text-slate-300 hover:text-rose-500"><Icon name="trash" className="w-3 h-3"/></button></div>))}</div><button onClick={() => setAwardGroups([...awardGroups,{id:`aw-${Date.now()}`,name:'賞名',color:'#'+Math.floor(Math.random()*16777215).toString(16)}])} className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-[10px] font-bold">+ 賞追加</button><div className="pt-2"><textarea className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-[10px] min-h-[60px] outline-none" placeholder="受賞者名を流し込む" value={awardForm} onChange={e => setAwardForm(e.target.value)} /><button onClick={assignAwardWinners} className="w-full mt-2 py-3 bg-amber-500 text-white rounded-xl text-[10px] font-black shadow-lg shadow-amber-100 hover:bg-amber-600 transition-all active:scale-95">エリアへ配置</button></div></div>
+                                    <div className="bg-white p-7 rounded-[40px] shadow-lg border border-slate-200/60 space-y-6"><h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2 pb-2 border-b border-slate-50"><Icon name="zap" className="w-3 h-3"/> 3. 配置ルール</h3><div className="space-y-4"><div className="grid grid-cols-1 gap-2"><button onClick={() => setPlacementPattern('full')} className={`py-2.5 px-4 rounded-2xl text-[10px] font-bold border-2 ${placementPattern === 'full' ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-100 text-slate-400'}`}>すべて埋める</button><button onClick={() => setPlacementPattern('skip')} className={`py-2.5 px-4 rounded-2xl text-[10px] font-bold border-2 ${placementPattern === 'skip' ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-100 text-slate-400'}`}>一つ飛ばし</button><button onClick={() => setPlacementPattern('desk2-3')} className={`py-2.5 px-4 rounded-2xl text-[10px] font-bold border-2 ${placementPattern === 'desk2-3' ? 'border-indigo-600 bg-indigo-50 text-indigo-600' : 'border-slate-100 text-slate-400'}`}>3人掛け両端</button></div><div className="space-y-2 pt-2"><label className="text-[9px] font-black text-slate-400 tracking-widest uppercase">優先順位</label>{sortPriority.map((key, index) => (<div key={key} className="flex items-center gap-3 bg-slate-50 p-3 rounded-2xl border transition-all"><div className={`w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-black ${index === 0 ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-200 text-slate-400'}`}>{index + 1}</div><span className="flex-1 text-[10px] font-black text-slate-700">{PRIORITY_LABELS[key]}</span>{index > 0 && <button onClick={() => setSortPriority(prev => [key, ...prev.filter(k => k !== key)])} className="p-1.5 bg-white border border-slate-200 rounded-xl text-indigo-600 hover:bg-indigo-50 active:scale-95 transition-all"><Icon name="up" className="w-3 h-3"/></button>}</div>))}</div></div><div className="pt-4 border-t border-slate-50"><label className="text-[11px] font-black text-slate-400">一般参加者の配置人数</label><input type="number" value={limitCount} onChange={(e) => setLimitCount(parseInt(e.target.value)||0)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-[20px] font-black text-xl text-center text-indigo-600 focus:ring-2 focus:ring-indigo-500 outline-none" /></div></div>
+                                    <div className="bg-white p-7 rounded-[40px] shadow-lg border border-slate-200/60 space-y-5 animate-in"><h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2 pb-2 border-b border-slate-50"><Icon name="upload" className="w-3 h-3"/> 4. 名簿読込</h3><label className={`flex flex-col items-center justify-center w-full h-32 border-3 border-dashed rounded-[32px] cursor-pointer transition-all border-slate-200 hover:bg-slate-50`}><Icon name="upload" className="text-slate-400 w-6 h-6 mb-2" /><span className="text-[11px] font-black text-slate-500 uppercase tracking-tighter">Excelをドロップ</span><input type="file" className="hidden" accept=".xlsx,.csv" onChange={e => processFile(e.target.files[0])} /></label><textarea className="w-full h-40 p-4 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-[24px] outline-none" value={employeeInput} onChange={(e) => setEmployeeInput(e.target.value)} /><button onClick={handleParseManual} className="w-full py-3 bg-slate-800 text-white rounded-2xl font-black text-[11px] shadow-lg active:scale-95">反映</button></div>
+                                    <div className="bg-white p-7 rounded-[40px] shadow-lg border border-slate-200/60 space-y-5 animate-in"><h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2 pb-2 border-b border-slate-50"><Icon name="plus" className="w-3 h-3"/> 5. 会場構成</h3><div className="space-y-3 max-h-48 overflow-auto pr-1 custom-scrollbar">{blocks.map(b => (<div key={b.id} className="p-5 bg-slate-50 rounded-[28px] border border-slate-200 relative group/blk shadow-sm"><button onClick={() => setBlocks(blocks.filter(x=>x.id!==b.id))} className="absolute top-3 right-3 opacity-0 group-hover/blk:opacity-100 text-slate-300 hover:text-rose-500 transition-all"><Icon name="trash" /></button><input className="bg-transparent border-none text-[12px] font-black w-full p-0 text-slate-700 outline-none focus:ring-0" value={b.name} onChange={e => setBlocks(blocks.map(x=>x.id===b.id?{...x,name:e.target.value}:x))} /><div className="flex gap-3 mt-3 text-center"><div className="flex-1"><label className="text-[9px] text-slate-400 font-bold block">Rows</label><input type="number" className="w-full p-2 bg-white text-xs border rounded-xl font-bold" value={b.rows} onChange={e => {const v=parseInt(e.target.value)||1;setBlocks(blocks.map(x=>x.id===b.id?{...x,rows:v,capacity:v*x.cols}:x))}} /></div><div className="flex-1"><label className="text-[9px] text-slate-400 font-bold block">Cols</label><input type="number" className="w-full p-2 bg-white text-xs border rounded-xl font-bold" value={b.cols} onChange={e => {const v=parseInt(e.target.value)||1;setBlocks(blocks.map(x=>x.id===b.id?{...x,cols:v,capacity:v*x.rows}:x))}} /></div></div></div>))}</div><button onClick={() => setBlocks([...blocks, { id: Date.now(), name: `新ブロック`, rows: 5, cols: 6, capacity: 30 }])} className="w-full py-4 border-2 border-dashed border-indigo-200 rounded-[24px] text-indigo-500 text-[11px] font-black active:scale-95 flex items-center justify-center gap-2 hover:bg-indigo-50 transition-all"><Icon name="plus" /> ブロック追加</button><div className="pt-4 border-t border-slate-50"><input type="range" min="70" max="160" value={seatSize} onChange={e => setSeatSize(parseInt(e.target.value))} className="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" /></div></div>
                                 </>
                             )}
                         </div>
 
-                        {/* Main Area */}
                         <div className="lg:col-span-9 bg-white rounded-[80px] shadow-2xl border border-slate-200/50 p-6 md:p-12 min-h-[1000px] overflow-auto relative select-none">
                             <div className="max-w-4xl mx-auto mb-24 relative"><div className="bg-slate-800 text-white py-8 rounded-b-[50px] font-black text-center shadow-2xl tracking-[1.5em] text-lg relative z-20 border-b-8 border-slate-900 uppercase">Stage / ステージ</div><div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-40 bg-indigo-500/5 blur-[80px] rounded-full pointer-events-none"></div></div>
                             <div className="flex flex-wrap justify-center gap-20 relative z-10">
@@ -481,14 +429,14 @@
                                         <h4 className="mb-6 text-[12px] font-black text-slate-400 uppercase tracking-[0.4em] flex items-center justify-center gap-3">{b.name}</h4>
                                         <div className="grid gap-3 p-10 block-container rounded-[56px]" style={{ gridTemplateColumns: `repeat(${b.cols}, minmax(0, 1fr))` }}>
                                             {Array.from({ length: b.capacity }).map((_, i) => {
-                                                const k = `${b.id}-${i}`, emp = assignments[k], res = reservedSeats[k], hit = searchTerm && emp?.name.includes(searchTerm), dis = disabledSeats.has(k), isSel = selectedSeat?.blockId === b.id && selectedSeat?.index === i;
-                                                const seatStyle = getSeatStyles(emp, isSel, hit, res);
+                                                const k = `${b.id}-${i}`, emp = assignments[k], resId = reservedSeats[k], hit = searchTerm && emp?.name.includes(searchTerm), dis = disabledSeats.has(k), isSel = selectedSeat?.blockId === b.id && selectedSeat?.index === i;
+                                                const seatStyle = getSeatStyles(emp, isSel, hit, resId);
                                                 const isInSel = isSelecting && selectionStart?.blockId === b.id && ( (r, c, r1, c1, r2, c2) => {
                                                     const minR = Math.min(r1, r2), maxR = Math.max(r1, r2); const minC = Math.min(c1, c2), maxC = Math.max(c1, c2);
                                                     return r >= minR && r <= maxR && c >= minC && c <= maxC;
                                                 })(Math.floor(i/b.cols), i%b.cols, Math.floor(selectionStart.index/b.cols), selectionStart.index%b.cols, Math.floor((selectionEnd?.index??selectionStart.index)/b.cols), (selectionEnd?.index??selectionStart.index)%b.cols);
-                                                return (<div key={i} draggable={!isViewMode && emp && editMode === 'swap'} onDragStart={() => onDragStart(k)} onDragOver={(e) => onDragOverTarget(e, k)} onDrop={(e) => onDropOnSeat(e, k)} onMouseDown={(e) => handleMouseDown(e, b.id, i)} onMouseEnter={() => handleMouseEnterSeat(i)} onClick={() => handleSeatClick(b.id, i)} className={`transition-all duration-300 flex flex-col items-center justify-center border relative group cursor-pointer rounded-[28px] shadow-sm ${dis ? 'seat-disabled' : res ? 'seat-reserved' : !emp ? 'seat-empty' : ''} ${draggedKey === k ? 'dragging' : ''} ${dropTargetKey === k ? 'drop-target' : ''} ${isInSel ? 'ring-4 ring-indigo-500 ring-offset-2 z-50' : ''}`} style={{ width: `${seatSize}px`, height: `${seatSize}px`, ...(!dis ? seatStyle : {}) }}>
-                                                        {dis ? (<Icon name="ban" className="w-5 h-5 opacity-50" />) : res ? (<div className="flex flex-col items-center gap-0.5 px-1 overflow-hidden"><Icon name="star" className="w-4 h-4 shadow-sm" style={{ color: awardGroups.find(g => g.id === res)?.color }} />{emp ? ( <div className="px-2 text-center w-full overflow-hidden select-none"><div className="font-black leading-tight truncate w-full text-[12px]">{emp.name}</div></div> ) : ( <span className="text-[7px] font-black tracking-tighter opacity-80 uppercase text-center line-clamp-2 leading-none">{awardGroups.find(g => g.id === res)?.name}</span> )}</div>) : emp ? (<div className="px-3 text-center w-full overflow-hidden select-none"><div className={`font-black leading-tight mb-1 truncate w-full ${seatSize < 90 ? 'text-[10px]' : 'text-[13px]'}`}>{emp.name}</div><div className={`font-black tracking-tighter truncate w-full opacity-70 ${seatSize < 90 ? 'text-[7px]' : 'text-[9px]'}`}>{emp.dept}</div></div>) : ( !isViewMode && <div className="w-2 h-2 rounded-full bg-slate-200 group-hover:bg-indigo-300 transition-all border border-slate-200" /> )}
+                                                return (<div key={i} draggable={!isViewMode && emp && editMode === 'swap'} onDragStart={() => onDragStart(k)} onDragOver={(e) => onDragOverTarget(e, k)} onDrop={(e) => onDropOnSeat(e, k)} onMouseDown={(e) => handleMouseDown(e, b.id, i)} onMouseEnter={() => handleMouseEnterSeat(i)} onClick={() => handleSeatClick(b.id, i)} className={`transition-all duration-300 flex flex-col items-center justify-center border relative group cursor-pointer rounded-[28px] shadow-sm ${dis ? 'seat-disabled' : resId ? 'seat-reserved' : !emp ? 'seat-empty' : ''} ${draggedKey === k ? 'dragging' : ''} ${dropTargetKey === k ? 'drop-target' : ''} ${isInSel ? 'ring-4 ring-indigo-500 ring-offset-2 z-50' : ''}`} style={{ width: `${seatSize}px`, height: `${seatSize}px`, ...(!dis ? seatStyle : {}) }}>
+                                                        {dis ? (<Icon name="ban" className="w-5 h-5 opacity-50" />) : resId ? (<div className="flex flex-col items-center gap-0.5 px-1 overflow-hidden"><Icon name="star" className="w-4 h-4 shadow-sm" style={{ color: awardGroups.find(g => g.id === resId)?.color }} />{emp ? ( <div className="px-2 text-center w-full overflow-hidden select-none"><div className="font-black leading-tight truncate w-full text-[12px]">{emp.name}</div></div> ) : ( <span className="text-[7px] font-black tracking-tighter opacity-80 uppercase text-center line-clamp-2 leading-none">{awardGroups.find(g => g.id === resId)?.name}</span> )}</div>) : emp ? (<div className="px-3 text-center w-full overflow-hidden select-none"><div className={`font-black leading-tight mb-1 truncate w-full ${seatSize < 90 ? 'text-[10px]' : 'text-[13px]'}`}>{emp.name}</div><div className={`font-black tracking-tighter truncate w-full opacity-70 ${seatSize < 90 ? 'text-[7px]' : 'text-[9px]'}`}>{emp.dept}</div></div>) : ( !isViewMode && <div className="w-2 h-2 rounded-full bg-slate-200 group-hover:bg-indigo-300 transition-all border border-slate-200" /> )}
                                                         <div className="absolute top-2 right-2 text-[6px] font-black opacity-10 group-hover:opacity-100 transition-opacity tracking-tighter">{Math.floor(i/b.cols)+1}-{(i%b.cols)+1}</div>
                                                     </div>);
                                             })}

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>座席配置オートメーション 8.0</title>
+    <title>座席配置オートメーション 8.1</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -39,13 +39,10 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        // --- 固定設定値 ---
+        // --- 設定値 ---
         const PRIORITY_LABELS = { type: '雇用形態(ランク)', dept: '部署', code: '社員番号(社歴)' };
-        
-        // ユーザー指定の優先順位: 役員 ＞ 総合職 ＞ 業務職
         const RANK_ORDER = ['役員', '総合職', '業務職', 'TK職', 'AP職', 'K職'];
         
-        // 指定されたデフォルトの賞グループ
         const DEFAULT_AWARD_GROUPS = [
             { id: 'aw-1', name: 'チャレンジ賞', color: '#fbbf24' },
             { id: 'aw-2', name: '努力賞', color: '#f87171' },
@@ -89,20 +86,14 @@
             const [isSaving, setIsSaving] = useState(false);
             const [draggedKey, setDraggedKey] = useState(null); 
             const [dropTargetKey, setDropTargetKey] = useState(null); 
-            const [limitCount, setLimitCount] = useState(200); // 総会規模に合わせてデフォルト増量
-            
-            // デフォルト優先順位: 雇用形態 > 部署
+            const [limitCount, setLimitCount] = useState(250); 
             const [sortPriority, setSortPriority] = useState(['type', 'dept', 'code']); 
-            
             const [placementPattern, setPlacementPattern] = useState('full'); 
             const [selectedSeat, setSelectedSeat] = useState(null); 
             const [disabledSeats, setDisabledSeats] = useState(new Set()); 
-            
-            // 指定された賞グループを初期化
             const [awardGroups, setAwardGroups] = useState(DEFAULT_AWARD_GROUPS);
             const [selectedAwardId, setSelectedAwardId] = useState(DEFAULT_AWARD_GROUPS[0].id);
             const [reservedSeats, setReservedSeats] = useState({}); 
-            
             const [editMode, setEditMode] = useState('swap'); 
             const [assignments, setAssignments] = useState({});
             const [undoStack, setUndoStack] = useState([]); 
@@ -119,7 +110,7 @@
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'seating-automation-app-v8';
             const db = useRef(null);
 
-            // --- Computed Stats ---
+            // --- 統計情報 ---
             const stats = useMemo(() => {
                 const total = blocks.reduce((sum, b) => sum + b.capacity, 0);
                 const usable = total - disabledSeats.size;
@@ -128,7 +119,7 @@
                 return { total, usable, assigned, reserved: reservedCount, remaining: usable - assigned - reservedCount };
             }, [blocks, assignments, disabledSeats, reservedSeats]);
 
-            // --- UI Helpers ---
+            // --- デザイン管理 ---
             const getSeatStyles = (emp, isSelected, isHit, reservedGroupId) => {
                 if (reservedGroupId) {
                     const group = awardGroups.find(g => String(g.id) === String(reservedGroupId));
@@ -143,7 +134,7 @@
                 if (type.includes('役員')) { style.backgroundColor = '#be123c'; style.borderColor = '#fb7185'; style.color = '#ffffff'; } 
                 else if (type.includes('総合職')) { style.backgroundColor = '#fdf2f8'; style.borderColor = '#f472b6'; } 
                 else if (type.includes('業務')) { style.backgroundColor = '#f0f9ff'; style.borderColor = '#38bdf8'; } 
-                else if (type.includes('AP') || type.includes('K') || type.includes('TK')) { style.backgroundColor = '#f8fafc'; style.borderColor = '#94a3b8'; }
+                else if (type.includes('AP') || type.includes('K') || type.includes('TK') || type.includes('パート')) { style.backgroundColor = '#f8fafc'; style.borderColor = '#94a3b8'; }
                 if (isSelected || isHit) { style.boxShadow = '0 0 0 6px rgba(99, 102, 241, 0.4)'; style.transform = 'translateY(-4px) scale(1.05)'; style.borderColor = '#6366f1'; style.zIndex = '40'; }
                 return style;
             };
@@ -151,18 +142,10 @@
             const pushToUndo = () => setUndoStack(prev => [JSON.stringify({ assignments, reservedSeats, disabledSeats: Array.from(disabledSeats) }), ...prev].slice(0, 20));
             const showStatus = (text, type) => setStatusMessage({ text, type });
 
-            // --- Handlers ---
-            const handleUndo = () => {
-                if (undoStack.length === 0) return;
-                const state = JSON.parse(undoStack[0]);
-                setAssignments(state.assignments); setReservedSeats(state.reservedSeats);
-                setDisabledSeats(new Set(state.disabledSeats)); setUndoStack(prev => prev.slice(1));
-                showStatus("操作を戻しました。", "success");
-            };
-
+            // --- クラウド保存・同期 ---
             const handleSave = async () => {
                 const { doc, setDoc } = window.Firebase;
-                if (!db.current) return showStatus("Firebase未接続", "error");
+                if (!db.current) return showStatus("接続設定がありません", "error");
                 setIsSaving(true);
                 try {
                     const layoutDocRef = doc(db.current, 'artifacts', appId, 'public', 'data', 'layouts', 'main');
@@ -199,57 +182,71 @@
                 });
                 const bom = new Uint8Array([0xEF, 0xBB, 0xBF]), blob = new Blob([bom, csv], { type: "text/csv;charset=utf-8" });
                 const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "座席配置表.csv"; link.click();
-                showStatus("CSVを出力しました。", "success");
             };
 
-            // 手動名簿読み込み
+            // --- 名簿読込・解析 ---
             const handleParseManual = () => {
                 if (!employeeInput.trim()) return showStatus("名簿データを入力してください。", "error");
+                // カンマ、タブ、スペースに対応
                 const list = employeeInput.trim().split('\n').map((l, i) => {
-                    const p = l.split(/[\t\s]+/).filter(x => x.trim());
-                    return p.length < 2 ? null : { id: `m-${Date.now()}-${i}`, code: p[0]||'', name: p[1]||'', type: p[2]||'', dept: p[3]||'' };
+                    const p = l.split(/[,\t\s]+/).filter(x => x.trim());
+                    if (p.length < 1) return null;
+                    return { 
+                        id: `m-${Date.now()}-${i}`, 
+                        code: p.length >= 2 ? p[0] : "", 
+                        name: p.length >= 2 ? p[1] : p[0], 
+                        type: p[2] || "一般", 
+                        dept: p[3] || "" 
+                    };
                 }).filter(Boolean);
                 setEmployees(list);
-                showStatus(`${list.length}名の名簿を読込完了。`, 'success');
+                showStatus(`${list.length}名の名簿を読込完了。右上の「⚡️自動配置」で座席へ！`, 'success');
             };
 
-            // Excel読み込み（列名対応強化）
             const processFile = (file) => {
                 if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (evt) => {
                     try {
                         const wb = XLSX.read(new Uint8Array(evt.target.result), { type: 'array' });
-                        const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "" });
+                        // オブジェクト形式で読み込み（ヘッダー名をキーにする）
+                        const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: "" });
+                        
                         const parsed = data.map((row, i) => {
-                            // 列名の柔軟な検知
+                            // 列名の揺れを吸収
                             const name = row['氏名（フルネーム）'] || row['氏名'] || row['名前'] || row['name'];
-                            const code = row['社員番号'] || row['社員番号(KT0●●●)　'] || row['code'] || "";
+                            const code = row['社員番号'] || row['社員番号(KT0●●●)　'] || row['社員番号(KT0●●●)　'] || row['code'] || "";
                             const dept = row['所属部署'] || row['部署'] || row['dept'] || "";
                             const type = row['雇用形態'] || row['職種'] || row['type'] || "";
 
                             if (!name) return null;
                             return { id: `ex-${Date.now()}-${i}`, code: String(code).trim(), name: String(name).trim(), type: String(type).trim(), dept: String(dept).trim() };
                         }).filter(Boolean);
+
+                        if (parsed.length === 0) {
+                            showStatus("名簿を読み取れませんでした。列名（氏名、社員番号、所属部署、雇用形態）を確認してください。", "error");
+                            return;
+                        }
+
                         setEmployees(parsed); 
                         setEmployeeInput(parsed.map(e => `${e.code}\t${e.name}\t${e.type}\t${e.dept}`).join('\n'));
-                        showStatus(`${parsed.length}名のExcelデータを読み込みました。`, 'success');
-                    } catch (e) { showStatus("Excel解析エラー", "error"); }
+                        showStatus(`${parsed.length}名のデータをExcel/CSVから読み込みました。`, 'success');
+                    } catch (e) { showStatus("ファイルの解析に失敗しました。", "error"); }
                 };
                 reader.readAsArrayBuffer(file);
             };
 
-            // 自動配置ロジック
+            // --- 自動配置アルゴリズム ---
             const handleSmartAutoAssign = () => {
-                if (employees.length === 0) return showStatus("名簿が空です。", "error");
+                if (employees.length === 0) return showStatus("名簿が空です。先に名簿を読み込んでください。", "error");
                 pushToUndo();
                 const list = [...employees];
                 list.sort((a, b) => {
                     for (const key of sortPriority) {
                         if (key === 'type') {
-                            const getRank = (t) => {
-                                for(let i=0; i<RANK_ORDER.length; i++) if(t.includes(RANK_ORDER[i])) return i;
-                                return 99;
+                            const getRank = (t) => { 
+                                for(let i=0; i<RANK_ORDER.length; i++) if(t.includes(RANK_ORDER[i])) return i; 
+                                return 99; 
                             };
                             const diff = getRank(a.type) - getRank(b.type); if (diff !== 0) return diff;
                         } else if (key === 'dept') {
@@ -270,23 +267,23 @@
                         }
                     }
                 });
-                setAssignments(next); showStatus("自動配置が完了しました。", "success");
+                setAssignments(next); showStatus("ルール通りに自動配置しました。", "success");
             };
 
-            const saveIndividualEdit = () => {
-                if (!editingKey) return;
-                pushToUndo();
-                const next = { ...assignments };
-                next[editingKey] = { ...next[editingKey], name: editingData.name, dept: editingData.dept };
-                setAssignments(next); setEditingKey(null);
-                showStatus("修正しました。", "success");
+            // --- 操作関連 ---
+            const handleUndoClick = () => {
+                if (undoStack.length === 0) return;
+                const state = JSON.parse(undoStack[0]);
+                setAssignments(state.assignments); setReservedSeats(state.reservedSeats);
+                setDisabledSeats(new Set(state.disabledSeats)); setUndoStack(prev => prev.slice(1));
+                showStatus("操作を戻しました。", "success");
             };
 
             const assignAwardWinners = () => {
                 const names = awardForm.trim().split(/[\n,、\s]+/).map(n => n.trim()).filter(Boolean);
                 if (names.length === 0) return showStatus("受賞者名を入力してください。", "error");
                 const emptyReservedKeys = Object.keys(reservedSeats).filter(k => String(reservedSeats[k]) === String(selectedAwardId) && !assignments[k]);
-                if (emptyReservedKeys.length === 0) return showStatus("選択中の賞の空きエリアがありません。", "error");
+                if (emptyReservedKeys.length === 0) return showStatus("選択中の賞の空き予約エリアがありません。賞指定モードで範囲を囲ってください。", "error");
                 pushToUndo();
                 const nextAssignments = { ...assignments };
                 names.forEach((name, idx) => { if (emptyReservedKeys[idx]) nextAssignments[emptyReservedKeys[idx]] = { id: `aw-${Date.now()}-${idx}`, name, dept: '受賞者', type: '受賞者', code: '0000' }; });
@@ -300,7 +297,7 @@
                 return nb;
             }));
 
-            // --- Firebase初期化 ---
+            // --- ライフサイクル ---
             useEffect(() => {
                 const params = new URLSearchParams(window.location.search);
                 if (params.get('mode') === 'view') setIsViewMode(true);
@@ -319,14 +316,14 @@
                             const data = snapshot.data();
                             setAssignments(data.assignments || {}); setBlocks(data.blocks || []);
                             setDisabledSeats(new Set(data.disabledSeats || [])); setReservedSeats(data.reservedSeats || {});
-                            setLimitCount(data.limitCount || 200); if (data.awardGroups) setAwardGroups(data.awardGroups);
+                            setLimitCount(data.limitCount || 250); if (data.awardGroups) setAwardGroups(data.awardGroups);
                         }
                     });
                 };
                 initFirebase();
             }, []);
 
-            // --- Interactions ---
+            // --- マウス操作 ---
             const handleMouseDown = (e, blockId, index) => { if (editMode !== 'range' || isViewMode) return; setIsSelecting(true); setSelectionStart({ blockId, index }); setSelectionEnd({ index }); };
             const handleMouseEnterSeat = (idx) => { if (isSelecting) setSelectionEnd(prev => ({ ...prev, index: idx })); };
             const finalizeRangeSelection = () => {
@@ -385,24 +382,25 @@
             return (
                 <div className={`p-4 md:p-8 max-w-[1800px] mx-auto min-h-screen ${isViewMode ? 'bg-slate-50' : 'bg-slate-100'}`} onMouseUp={() => { if(isSelecting) finalizeRangeSelection(); setIsSelecting(false); }}>
                     
-                    {/* モーダル群 */}
+                    {/* 座席修正モーダル */}
                     {editingKey && (
                         <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white p-8 rounded-[40px] shadow-2xl max-w-sm w-full border animate-in">
-                                <h3 className="text-xl font-black mb-6 flex items-center gap-2 text-slate-700"><Icon name="edit" className="text-indigo-600" /> 座席情報の修正</h3>
+                                <h3 className="text-xl font-black mb-6 flex items-center gap-2 text-slate-700"><Icon name="edit" className="text-indigo-600" /> 個別修正</h3>
                                 <div className="space-y-4">
                                     <div><label className="text-[10px] font-black text-slate-400 uppercase ml-1">氏名</label><input className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black focus:ring-2 focus:ring-indigo-500 outline-none" value={editingData.name} onChange={e=>setEditingData({...editingData, name: e.target.value})} /></div>
                                     <div><label className="text-[10px] font-black text-slate-400 uppercase ml-1">部署/役職</label><input className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl font-black focus:ring-2 focus:ring-indigo-500 outline-none" value={editingData.dept} onChange={e=>setEditingData({...editingData, dept: e.target.value})} /></div>
                                 </div>
-                                <div className="flex gap-4 mt-8"><button onClick={() => setEditingKey(null)} className="flex-1 py-4 rounded-2xl bg-slate-100 font-bold text-slate-500 hover:bg-slate-200 transition-all">戻る</button><button onClick={saveIndividualEdit} className="flex-1 py-4 rounded-2xl bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-100 active:scale-95 transition-all">更新</button></div>
+                                <div className="flex gap-4 mt-8"><button onClick={() => setEditingKey(null)} className="flex-1 py-4 rounded-2xl bg-slate-100 font-bold text-slate-500 hover:bg-slate-200">戻る</button><button onClick={saveIndividualEdit} className="flex-1 py-4 rounded-2xl bg-indigo-600 text-white font-bold">更新</button></div>
                             </div>
                         </div>
                     )}
+
                     {showResetConfirm && (
                         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 modal-overlay">
                             <div className="bg-white p-10 rounded-[40px] shadow-2xl max-w-sm w-full border text-center">
-                                <h3 className="text-2xl font-black mb-6">配置をリセットしますか？</h3>
-                                <div className="flex gap-4"><button onClick={() => setShowResetConfirm(false)} className="flex-1 py-4 rounded-2xl bg-slate-100 font-bold text-slate-500 hover:bg-slate-200">戻る</button><button onClick={() => { pushToUndo(); setAssignments({}); setReservedSeats({}); setDisabledSeats(new Set()); setShowResetConfirm(false); }} className="flex-1 py-4 rounded-2xl bg-rose-600 text-white font-bold active:scale-95 transition-all">リセット</button></div>
+                                <h3 className="text-2xl font-black mb-6">全クリア？</h3>
+                                <div className="flex gap-4"><button onClick={() => setShowResetConfirm(false)} className="flex-1 py-4 rounded-2xl bg-slate-100 font-bold text-slate-500 hover:bg-slate-200">戻る</button><button onClick={() => { pushToUndo(); setAssignments({}); setReservedSeats({}); setDisabledSeats(new Set()); setShowResetConfirm(false); }} className="flex-1 py-4 rounded-2xl bg-rose-600 text-white font-bold">リセット</button></div>
                             </div>
                         </div>
                     )}
@@ -411,18 +409,18 @@
                         <div className="flex items-center gap-5">
                             <div className="bg-indigo-600 text-white p-4 rounded-[24px] shadow-xl"><Icon name="layout" className="w-10 h-10" /></div>
                             <div>
-                                <h1 className="text-3xl md:text-5xl font-black text-slate-800 tracking-tighter uppercase leading-none italic">座席配置 <span className="text-indigo-600 not-italic">8.0</span></h1>
+                                <h1 className="text-3xl md:text-5xl font-black text-slate-800 tracking-tighter uppercase leading-none italic">座席配置 <span className="text-indigo-600 not-italic">8.1</span></h1>
                                 <div className="flex items-center gap-3 mt-3">
                                     <div className="status-card border-indigo-100 bg-indigo-50/50 shadow-sm"><span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest leading-none mb-1">Total</span><span className="text-lg font-black text-indigo-700">{stats.total}</span></div>
                                     <div className="status-card border-slate-100 bg-white shadow-sm"><span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Filled</span><span className="text-lg font-black text-indigo-700">{stats.assigned}</span></div>
-                                    <div className="status-card border-amber-100 bg-amber-50/30 shadow-sm"><span className="text-[9px] font-black text-amber-400 uppercase tracking-widest leading-none mb-1">Reserve</span><span className="text-lg font-black text-amber-600">{stats.reserved}</span></div>
+                                    <div className="status-card border-amber-100 bg-amber-50/30 shadow-sm"><span className="text-[9px] font-black text-amber-400 uppercase tracking-widest leading-none mb-1">Awards</span><span className="text-lg font-black text-amber-600">{stats.reserved}</span></div>
                                 </div>
                             </div>
                         </div>
                         <div className="flex flex-wrap gap-4 bg-white p-4 rounded-[36px] shadow-xl border border-slate-200/50 font-bold">
                             {!isViewMode ? (
                                 <>
-                                    <button onClick={handleUndo} disabled={undoStack.length === 0} className={`px-5 py-3 text-sm font-bold rounded-2xl flex items-center gap-2 ${undoStack.length === 0 ? 'text-slate-200' : 'text-indigo-600 hover:bg-indigo-50 transition-all'}`}><Icon name="undo" />戻す</button>
+                                    <button onClick={handleUndoClick} disabled={undoStack.length === 0} className={`px-5 py-3 text-sm font-bold rounded-2xl flex items-center gap-2 ${undoStack.length === 0 ? 'text-slate-200' : 'text-indigo-600 hover:bg-indigo-50 transition-all'}`}><Icon name="undo" />戻す</button>
                                     <button onClick={() => setShowResetConfirm(true)} className="px-5 py-3 text-sm font-bold text-rose-600 hover:bg-rose-50 rounded-2xl flex items-center gap-2 transition-all"><Icon name="rotate" />リセット</button>
                                     <button onClick={handleSave} disabled={isSaving} className={`px-8 py-3 text-sm font-black bg-emerald-600 text-white rounded-2xl shadow-lg flex items-center gap-2 ${isSaving ? 'opacity-50' : 'hover:bg-emerald-700 active:scale-95 transition-all'}`}><Icon name="save" /> {isSaving ? '保存中...' : '保存して公開'}</button>
                                     <button onClick={copyAttendeeUrl} className="px-6 py-3 text-sm font-bold bg-white border border-slate-200 rounded-2xl flex items-center gap-2 hover:bg-slate-50 transition-all"><Icon name="share" /> URLコピー</button>
@@ -451,13 +449,13 @@
                                             {awardGroups.map(group => (
                                                 <div key={group.id} onClick={() => setSelectedAwardId(group.id)} className={`p-3 rounded-2xl border-2 cursor-pointer flex items-center gap-3 transition-all ${selectedAwardId === group.id ? 'ring-2 ring-indigo-500 ring-offset-2' : 'opacity-70'}`} style={{ borderColor: group.color, backgroundColor: `${group.color}08` }}>
                                                     <div className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: group.color }} />
-                                                    <input className="flex-1 bg-transparent font-black text-[11px] border-none p-0 focus:ring-0 outline-none" value={group.name} onChange={(e) => setAwardGroups(awardGroups.map(g => g.id === group.id ? {...g, name: e.target.value} : g))} />
+                                                    <span className="flex-1 font-black text-[11px] truncate">{group.name}</span>
                                                 </div>
                                             ))}
                                         </div>
                                         <div className="pt-2">
                                             <textarea className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-[10px] min-h-[60px] outline-none focus:ring-2 focus:ring-amber-500 shadow-inner" placeholder="受賞者の名前を1行ずつ入力..." value={awardForm} onChange={e => setAwardForm(e.target.value)} />
-                                            <button onClick={assignAwardWinners} className="w-full mt-2 py-4 bg-amber-500 text-white rounded-xl text-[10px] font-black shadow-lg shadow-amber-100 hover:bg-amber-600 transition-all active:scale-95">エリアへ配置実行</button>
+                                            <button onClick={assignAwardWinners} className="w-full mt-2 py-4 bg-amber-500 text-white rounded-xl text-[10px] font-black shadow-lg shadow-amber-100 hover:bg-amber-600 transition-all active:scale-95">指定エリアへ配置実行</button>
                                         </div>
                                     </div>
 
@@ -481,9 +479,9 @@
 
                                     <div className="bg-white p-7 rounded-[40px] shadow-lg border border-slate-200/60 space-y-5 animate-in">
                                         <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-[0.2em] flex items-center gap-2 pb-2 border-b border-slate-50"><Icon name="upload" className="w-3 h-3"/> 4. 名簿読込</h3>
-                                        <label className={`flex flex-col items-center justify-center w-full h-32 border-3 border-dashed rounded-[32px] cursor-pointer transition-all border-slate-200 hover:bg-slate-50 hover:border-indigo-300`}><Icon name="upload" className="text-slate-400 w-6 h-6 mb-2" /><span className="text-[11px] font-black text-slate-500 uppercase tracking-tighter">Excel/CSVをドロップ</span><input type="file" className="hidden" accept=".xlsx,.csv" onChange={e => processFile(e.target.files[0])} /></label>
+                                        <label className={`flex flex-col items-center justify-center w-full h-32 border-3 border-dashed rounded-[32px] cursor-pointer transition-all border-slate-200 hover:bg-slate-50 hover:border-indigo-300`}><Icon name="upload" className="text-slate-400 w-6 h-6 mb-2" /><span className="text-[11px] font-black text-slate-500 uppercase tracking-tighter text-center">Excel / CSV<br/>ドロップ</span><input type="file" className="hidden" accept=".xlsx,.csv" onChange={e => processFile(e.target.files[0])} /></label>
                                         <textarea className="w-full h-40 p-4 text-[10px] font-mono bg-slate-50 border border-slate-200 rounded-[24px] outline-none focus:ring-2 focus:ring-slate-300 shadow-inner" value={employeeInput} onChange={(e) => setEmployeeInput(e.target.value)} placeholder="社員番号 氏名 雇用形態 部署" />
-                                        <button onClick={handleParseManual} className="w-full py-4 bg-slate-800 text-white rounded-2xl font-black text-[11px] shadow-lg hover:bg-slate-900 active:scale-95 transition-all">名簿を解析</button>
+                                        <button onClick={handleParseManual} className="w-full py-4 bg-slate-800 text-white rounded-2xl font-black text-[11px] shadow-lg hover:bg-slate-900 active:scale-95 transition-all">名簿を解析して読込</button>
                                     </div>
 
                                     <div className="bg-white p-7 rounded-[40px] shadow-lg border border-slate-200/60 space-y-5 animate-in">
@@ -496,7 +494,7 @@
                             )}
                         </div>
 
-                        {/* Main View Area */}
+                        {/* メインビュー */}
                         <div className="lg:col-span-9 bg-white rounded-[80px] shadow-2xl border border-slate-200/50 p-6 md:p-12 min-h-[1000px] overflow-auto relative select-none">
                             <div className="max-w-4xl mx-auto mb-24 relative"><div className="bg-slate-800 text-white py-8 rounded-b-[50px] font-black text-center shadow-2xl tracking-[1.5em] text-lg relative z-20 border-b-8 border-slate-900 uppercase">Stage / ステージ</div><div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-40 bg-indigo-500/5 blur-[80px] rounded-full pointer-events-none"></div></div>
                             <div className="flex flex-wrap justify-center gap-20 relative z-10">
@@ -505,7 +503,7 @@
                                         <h4 className="mb-6 text-[12px] font-black text-slate-400 uppercase tracking-[0.4em] flex items-center justify-center gap-3">{b.name}</h4>
                                         <div className="grid gap-3 p-10 block-container rounded-[56px]" style={{ gridTemplateColumns: `repeat(${b.cols}, minmax(0, 1fr))` }}>
                                             {Array.from({ length: b.capacity }).map((_, i) => {
-                                                const k = `${b.id}-${i}`, emp = assignments[k], resId = reservedSeats[k], hit = searchTerm && emp?.name.includes(searchTerm), dis = disabledSeats.has(k), isSel = selectedSeat?.blockId === b.id && selectedSeat?.index === i;
+                                                const k = `${b.id}-${i}`, emp = assignments[k], resId = reservedSeats[k], hit = searchTerm && (emp?.name.includes(searchTerm) || emp?.dept.includes(searchTerm)), dis = disabledSeats.has(k), isSel = selectedSeat?.blockId === b.id && selectedSeat?.index === i;
                                                 const seatStyle = getSeatStyles(emp, isSel, hit, resId);
                                                 const isInSel = isSelecting && selectionStart?.blockId === b.id && ( (r, c, r1, c1, r2, c2) => {
                                                     const minR = Math.min(r1, r2), maxR = Math.max(r1, r2); const minC = Math.min(c1, c2), maxC = Math.max(c1, c2);
